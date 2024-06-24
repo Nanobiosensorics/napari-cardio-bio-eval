@@ -6,6 +6,8 @@ implement multiple readers or even other plugin contributions. see:
 https://napari.org/stable/plugins/guides.html?#readers
 """
 import numpy as np
+import os
+from nanobio_core. epic_cardio.processing import load_data, preprocessing, load_params
 
 
 def napari_get_reader(path):
@@ -19,8 +21,6 @@ def napari_get_reader(path):
     Returns
     -------
     function or None
-        If the path is a recognized format, return a function that accepts the
-        same path or list of paths, and returns a list of layer data tuples.
     """
     if isinstance(path, list):
         # reader plugins may be handed single path, or a list of paths.
@@ -32,7 +32,21 @@ def napari_get_reader(path):
     if not path.endswith(".npy"):
         return None
 
-    # otherwise we return the *function* that can read ``path``.
+    """
+    We need a directory and in that directory we need a file named 'test_avg' and a file named 'test_WL_Power'.
+
+    files = [ obj for obj in os.listdir(dir_path) if '_wl_power' in obj.lower()]
+    if len(files) == 0:
+        print("Missing test wl power file!!!")
+        return None
+        
+    files = [ obj for obj in os.listdir(dir_path) if '_avg' in obj.lower()]
+    if len(files) == 0:
+        print("Missing test avg!!!")
+        return None
+    
+    """
+
     return reader_function
 
 
@@ -58,15 +72,25 @@ def reader_function(path):
         layer. Both "meta", and "layer_type" are optional. napari will
         default to layer_type=="image" if not provided
     """
-    # handle both a string and a list of strings
-    paths = [path] if isinstance(path, str) else path
-    # load all files into array
-    arrays = [np.load(_path) for _path in paths]
-    # stack arrays into single array
-    data = np.squeeze(np.stack(arrays))
+    preprocessing_params = {
+        'flip': [False, False], # Vertical and Horizontal flipping
+        'signal_range' : {
+            'range_type': RangeType.MEASUREMENT_PHASE,
+            'ranges': [0, None],
+        },
+        'drift_correction': {
+            'threshold': 75,
+            'filter_method': 'mean',
+            'background_selector': True,
+        }
+    } 
+    Path = path
+    RESULT_PATH = os.path.join(path, 'result')
+    if not os.path.exists(RESULT_PATH):
+        os.mkdir(RESULT_PATH)
 
-    # optional kwargs for the corresponding viewer.add_* method
-    add_kwargs = {}
+    raw_wells, full_time, full_phases = load_data(path, flip=preprocessing_params['flip'])
+    filter_params, _, _ = load_params(RESULT_PATH)
+    well_data, time, phases, filter_ptss, selected_range = preprocessing(preprocessing_params, raw_wells, full_time, full_phases, filter_params)
 
-    layer_type = "image"  # optional, default is "image"
-    return [(data, add_kwargs, layer_type)]
+    return [(well_data, 'image')]
