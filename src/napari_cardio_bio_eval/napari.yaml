@@ -21,8 +21,8 @@ contributions:
     - id: napari-cardio-bio-eval.make_container_widget
       python_name: napari_cardio_bio_eval:ImageThreshold
       title: Make threshold Container widget
-    - id: napari-cardio-bio-eval.make_data_widget
-      python_name: napari_cardio_bio_eval:DataPreprocessingWidget
+    - id: napari-cardio-bio-eval.cardio_bio_eval_widget
+      python_name: napari_cardio_bio_eval:CardioBioEvalWidget
       title: Data load nad processing widget
 
   readers:
@@ -43,5 +43,5 @@ contributions:
   widgets:
     - command: napari-cardio-bio-eval.make_container_widget
       display_name: Container Threshold
-    - command: napari-cardio-bio-eval.make_data_widget
-      display_name: Data Processing Widget
+    - command: napari-cardio-bio-eval.cardio_bio_eval_widget
+      display_name: Cardio Bio Eval Widget

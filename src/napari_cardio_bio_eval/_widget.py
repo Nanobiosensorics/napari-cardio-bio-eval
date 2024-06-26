@@ -24,6 +24,7 @@ from magicgui.widgets import CheckBox, Container, create_widget
 from skimage.util import img_as_float
 from nanobio_core.epic_cardio.processing import *
 from nanobio_core.epic_cardio.defs import WELL_NAMES
+from nanobio_core.kiertekelo.export import export_results
 
 
 if TYPE_CHECKING:
@@ -78,7 +79,7 @@ class ImageThreshold(Container):
         else:
             self._viewer.add_labels(thresholded, name=name)
 
-class DataPreprocessingWidget(QWidget):
+class CardioBioEvalWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
         self.viewer = viewer
@@ -121,7 +122,7 @@ class DataPreprocessingWidget(QWidget):
         self.loadButton.clicked.connect(self.loadAndPreprocessData)
         self.layout.addRow(self.loadButton)
 
-        # Peak detection button
+        # Peak detection parameters
         self.neighbourhood_size = QSpinBox(self)
         self.neighbourhood_size.setMinimum(0)
         self.neighbourhood_size.setMaximum(10)
@@ -130,10 +131,51 @@ class DataPreprocessingWidget(QWidget):
         self.errorMaskFiltering = QCheckBox('Error Mask Filtering', self)
         self.errorMaskFiltering.setChecked(True)
         self.layout.addRow(self.errorMaskFiltering)
-
+        # Peak detection button
         self.peakButton = QPushButton('Peak Detection', self)
         self.peakButton.clicked.connect(self.peakDetection)
         self.layout.addRow(self.peakButton)
+
+        # Export parameters
+        self.coordinates = QCheckBox('Coordinates', self)
+        self.coordinates.setChecked(True)
+        self.layout.addRow(self.coordinates)
+
+        self.preprocessedSignals = QCheckBox('Preprocessed Signals', self)
+        self.preprocessedSignals.setChecked(True)
+        self.layout.addRow(self.preprocessedSignals)
+
+        self.rawSignals = QCheckBox('Raw Signals', self)
+        self.rawSignals.setChecked(True)
+        self.layout.addRow(self.rawSignals)
+
+        self.averageSignal = QCheckBox('Average Signal', self)
+        self.layout.addRow(self.averageSignal)
+        self.breakdownSignal = QCheckBox('Breakdown Signal', self)
+        self.layout.addRow(self.breakdownSignal)
+
+        self.maxWell = QCheckBox('Max Well', self)
+        self.maxWell.setChecked(True)
+        self.layout.addRow(self.maxWell)
+
+        self.plotSignalsWithWell = QCheckBox('Plot Signals with Well', self)
+        self.plotSignalsWithWell.setChecked(True)
+        self.layout.addRow(self.plotSignalsWithWell)
+
+        self.plotWellWithCoordinates = QCheckBox('Plot Well with Coordinates', self)
+        self.plotWellWithCoordinates.setChecked(True)
+        self.layout.addRow(self.plotWellWithCoordinates)
+
+        self.plotCellsIndividually = QCheckBox('Plot Cells Individually', self)
+        self.layout.addRow(self.plotCellsIndividually)
+        self.signalPartsByPhases = QCheckBox('Signal Parts by Phases', self)
+        self.layout.addRow(self.signalPartsByPhases)
+        self.maxCenteredSignals = QCheckBox('Max Centered Signals', self)
+        self.layout.addRow(self.maxCenteredSignals)
+
+        self.exportButton = QPushButton('Export Data', self)
+        self.exportButton.clicked.connect(self.exportData)
+        self.layout.addRow(self.exportButton)
 
 
     def openFileNameDialog(self):
@@ -195,3 +237,24 @@ class DataPreprocessingWidget(QWidget):
             swapped_coordinates = [[y, x] for x, y in self.well_data[name][1]]
             self.viewer.add_points(swapped_coordinates, name=name, size=1, face_color='red', visible=False)
 
+    def exportData(self):
+        self.export_params = {
+            'coordinates': self.coordinates.isChecked(),
+            'preprocessed_signals': self.preprocessedSignals.isChecked(),
+            'raw_signals': self.rawSignals.isChecked(),
+            'average_signal': self.averageSignal.isChecked(),
+            'breakdown_signal': self.breakdownSignal.isChecked(),
+            'max_well': self.maxWell.isChecked(),
+            'plot_signals_with_well': self.plotSignalsWithWell.isChecked(),
+            'plot_well_with_coordinates': self.plotWellWithCoordinates.isChecked(),
+            'plot_cells_individually': self.plotCellsIndividually.isChecked(),
+            'signal_parts_by_phases': self.signalPartsByPhases.isChecked(),
+            'max_centered_signals': self.maxCenteredSignals.isChecked()
+        }
+        self.selected_ptss = {}
+        self.filter_ptss = {}
+
+        export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss, #backgroung selectorból
+                        self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
+        # json dumpnál a filterptss listával valami baj van
+        # save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
