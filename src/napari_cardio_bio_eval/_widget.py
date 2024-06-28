@@ -196,7 +196,7 @@ class CardioBioEvalWidget(QWidget):
             'drift_correction': {
             'threshold': self.threshold.value(),
             'filter_method': self.filterMethod.currentText(),
-            'background_selector': self.backgroundSelector.isChecked(),
+            'background_selector': self.backgroundSelector.isChecked(), #manual background selection is not implemented yet
             }
         }
 
@@ -228,14 +228,18 @@ class CardioBioEvalWidget(QWidget):
                                 self.raw_wells, self.selected_range, 
                                 {} if not self.preprocessing_params['drift_correction']['background_selector'] else background_selector.selected_coords)
 
+        self.remaining_wells = self.remaining_wells()
+
         self.viewer.layers.select_all()
         self.viewer.layers.remove_selected()
         
-
-        for name in WELL_NAMES:
-            self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=False)
-            swapped_coordinates = [[y, x] for x, y in self.well_data[name][1]]
-            self.viewer.add_points(swapped_coordinates, name=name, size=1, face_color='red', visible=False)
+        # visualize the data with peaks
+        for name in self.remaining_wells:
+            visible = (name == self.remaining_wells[0])
+            self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
+            # change the coordinates of the peaks to plot
+            self.viewer.add_points(np.array([[y, x] for x, y in self.well_data[name][1]]), name=name + ' peaks', size=1, face_color='red', visible=visible)
+        
 
     def exportData(self):
         self.export_params = {
@@ -251,10 +255,29 @@ class CardioBioEvalWidget(QWidget):
             'signal_parts_by_phases': self.signalPartsByPhases.isChecked(),
             'max_centered_signals': self.maxCenteredSignals.isChecked()
         }
-        self.selected_ptss = {}
+
+        
+        self.remaining_wells = self.remaining_wells()
+        for name in remaining_wells:
+            self.well_data[name] = (self.viewer.layers[name].data, self.viewer.layers[name + ' peaks'].data)
+
+        self.selected_ptss = self.selected_points()
         self.filter_ptss = {}
 
         export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss, #backgroung selectorból
                         self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
         # json dumpnál a filterptss listával valami baj van
         # save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
+
+    def selected_points(self):
+        selected_ptss = {}
+        for name in self.remaining_wells:
+            selected_ptss[name] = self.viewer.layers[name + ' peaks'].data
+        return selected_ptss
+
+    def remaining_wells(self):
+        remaining_wells = []
+        for layer in self.viewer.layers:
+            if 'peaks' not in layer.name:
+                remaining_wells.append(layer.name)
+        return remaining_wells        
