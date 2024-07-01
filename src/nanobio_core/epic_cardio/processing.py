@@ -60,7 +60,10 @@ def save_params(path, well_data, preprocessing, localization):
     if not os.path.exists(os.path.join(path, '.metadata')):
         os.mkdir(os.path.join(path, '.metadata'))
     parameters = {
-        'filter_ptss' : { key: value[-1] for key, value in well_data.items()},
+        # This code iterates through each key-value pair in well_data. For each value[-1], which is a list of tuples, 
+        # it iterates through each tuple x in the list, converting each element y within the tuple from a NumPy integer to a Python integer, 
+        # and reconstructs the tuple with these converted values. Because the json module does not support NumPy integers
+        'filter_ptss' : {key: [tuple(int(y) for y in x) for x in value[-1]] for key, value in well_data.items()},
         'preprocessing': preprocessing,
         'localization': localization
     }
