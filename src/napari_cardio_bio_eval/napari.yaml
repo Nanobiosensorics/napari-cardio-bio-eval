@@ -18,9 +18,6 @@ contributions:
     - id: napari-cardio-bio-eval.make_sample_data
       python_name: napari_cardio_bio_eval._sample_data:make_sample_data
       title: Load sample data from Cardio Biosensor Evaluation
-    - id: napari-cardio-bio-eval.make_container_widget
-      python_name: napari_cardio_bio_eval:ImageThreshold
-      title: Make threshold Container widget
     - id: napari-cardio-bio-eval.cardio_bio_eval_widget
       python_name: napari_cardio_bio_eval:CardioBioEvalWidget
       title: Data load nad processing widget
@@ -41,7 +38,5 @@ contributions:
       display_name: Cardio Biosensor Evaluation
       key: unique_id.1
   widgets:
-    - command: napari-cardio-bio-eval.make_container_widget
-      display_name: Container Threshold
     - command: napari-cardio-bio-eval.cardio_bio_eval_widget
       display_name: Cardio Bio Eval Widget
