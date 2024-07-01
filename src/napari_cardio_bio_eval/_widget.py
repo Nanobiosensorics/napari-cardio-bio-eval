@@ -25,10 +25,9 @@ from skimage.util import img_as_float
 from nanobio_core.epic_cardio.processing import *
 from nanobio_core.epic_cardio.defs import WELL_NAMES
 from nanobio_core.kiertekelo.export import export_results
+import napari
+from napari.qt.threading import thread_worker
 
-
-if TYPE_CHECKING:
-    import napari
 
 
 # if we want even more control over our widget, we can use
@@ -263,16 +262,13 @@ class CardioBioEvalWidget(QWidget):
 
         self.selected_ptss = self.selected_points()
 
-        # if self.export_params['plot_cells_individually']:
-            # need an other thread for this too long process
-            # maybe the whole export process should be in an other thread
+        exporter = self.export_res()
+        exporter.finished.connect(lambda: print('Export finished'))
+        exporter.start()
 
-        export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss, #backgroung selectorból
-                        self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
         # json dumpnál a filterptss listával valami baj van
         # save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
         
-        print('Export finished!')
 
     def invert_coords(self, coords):
         return np.array([[y, x] for x, y in coords])
@@ -289,3 +285,8 @@ class CardioBioEvalWidget(QWidget):
             if 'peaks' not in layer.name:
                 remaining_wells.append(layer.name)
         return remaining_wells        
+
+    @thread_worker
+    def export_res(self):
+        export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss, #backgroung selectorból
+                        self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
