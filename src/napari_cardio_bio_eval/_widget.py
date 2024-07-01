@@ -209,7 +209,8 @@ class CardioBioEvalWidget(QWidget):
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
         for name in WELL_NAMES:
-            self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=False)
+            visible = (name == WELL_NAMES[0])
+            self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
 
     def peakDetection(self):
         self.localization_params = {
@@ -228,7 +229,7 @@ class CardioBioEvalWidget(QWidget):
                                 self.raw_wells, self.selected_range, 
                                 {} if not self.preprocessing_params['drift_correction']['background_selector'] else background_selector.selected_coords)
 
-        self.remaining_wells = self.remaining_wells()
+        self.remaining_wells = self.remaining_wells_from_layers()
 
         self.viewer.layers.select_all()
         self.viewer.layers.remove_selected()
@@ -237,8 +238,8 @@ class CardioBioEvalWidget(QWidget):
         for name in self.remaining_wells:
             visible = (name == self.remaining_wells[0])
             self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
-            # change the coordinates of the peaks to plot
-            self.viewer.add_points(np.array([[y, x] for x, y in self.well_data[name][1]]), name=name + ' peaks', size=1, face_color='red', visible=visible)
+            # invert the coordinates of the peaks to plot in napari (later invert back for other plots)
+            self.viewer.add_points(self.invert_coords(self.well_data[name][1]), name=name + ' peaks', size=1, face_color='red', visible=visible)
         
 
     def exportData(self):
@@ -256,26 +257,33 @@ class CardioBioEvalWidget(QWidget):
             'max_centered_signals': self.maxCenteredSignals.isChecked()
         }
 
-        
-        self.remaining_wells = self.remaining_wells()
-        for name in remaining_wells:
+        self.remaining_wells = self.remaining_wells_from_layers()
+        for name in self.remaining_wells:
             self.well_data[name] = (self.viewer.layers[name].data, self.viewer.layers[name + ' peaks'].data)
 
         self.selected_ptss = self.selected_points()
-        self.filter_ptss = {}
+
+        # if self.export_params['plot_cells_individually']:
+            # need an other thread for this too long process
+            # maybe the whole export process should be in an other thread
 
         export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss, #backgroung selectorból
                         self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
         # json dumpnál a filterptss listával valami baj van
         # save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
+        
+        print('Export finished!')
+
+    def invert_coords(self, coords):
+        return np.array([[y, x] for x, y in coords])
 
     def selected_points(self):
         selected_ptss = {}
         for name in self.remaining_wells:
-            selected_ptss[name] = self.viewer.layers[name + ' peaks'].data
+            selected_ptss[name] = self.invert_coords(self.viewer.layers[name + ' peaks'].data)
         return selected_ptss
 
-    def remaining_wells(self):
+    def remaining_wells_from_layers(self):
         remaining_wells = []
         for layer in self.viewer.layers:
             if 'peaks' not in layer.name:
