@@ -239,6 +239,8 @@ class CardioBioEvalWidget(QWidget):
             self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
             # invert the coordinates of the peaks to plot in napari (later invert back for other plots)
             self.viewer.add_points(self.invert_coords(self.well_data[name][1]), name=name + ' peaks', size=1, face_color='red', visible=visible)
+            # filter points for background selection
+            # self.viewer.add_points(self.invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
         
 
     def exportData(self):
@@ -257,17 +259,16 @@ class CardioBioEvalWidget(QWidget):
         }
 
         self.remaining_wells = self.remaining_wells_from_layers()
-        for name in self.remaining_wells:
-            self.well_data[name] = (self.viewer.layers[name].data, self.viewer.layers[name + ' peaks'].data)
-
         self.selected_ptss = self.selected_points()
+
+        for name in self.remaining_wells:
+            self.well_data[name] = (self.viewer.layers[name].data, self.selected_ptss[name], self.well_data[name][-1])
 
         exporter = self.export_res()
         exporter.finished.connect(lambda: print('Export finished'))
         exporter.start()
 
-        # json dumpnál a filterptss listával valami baj van
-        # save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
+        save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
         
 
     def invert_coords(self, coords):
@@ -276,7 +277,7 @@ class CardioBioEvalWidget(QWidget):
     def selected_points(self):
         selected_ptss = {}
         for name in self.remaining_wells:
-            selected_ptss[name] = self.invert_coords(self.viewer.layers[name + ' peaks'].data)
+            selected_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + ' peaks'].data)).astype(np.uint8)
         return selected_ptss
 
     def remaining_wells_from_layers(self):
