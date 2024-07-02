@@ -162,12 +162,9 @@ class CardioBioEvalWidget(QWidget):
             visible = (name == WELL_NAMES[0])
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
 
-    def peakDetection(self):
-        self.localization_params = {
-            'threshold_range' : [.075*1000, 3*1000],
-            'neighbourhood_size': self.neighbourhood_size.value(),
-            'error_mask_filtering': self.errorMaskFiltering.isChecked()
-        }
+    # Manual Background selection here if the automatic is bad
+
+    # if self.backgroundSelector.isChecked():
 
         # if self.preprocessing_params['drift_correction']['background_selector']:
         #     background_selector = WellArrayBackgroundSelector(well_data, filter_params, False)
@@ -175,6 +172,14 @@ class CardioBioEvalWidget(QWidget):
         # if self.preprocessing_params['drift_correction']['background_selector']:
         #     filter_ptss = background_selector.selected_coords
 
+
+    def peakDetection(self):
+        self.localization_params = {
+            'threshold_range' : [.075*1000, 3*1000],
+            'neighbourhood_size': self.neighbourhood_size.value(),
+            'error_mask_filtering': self.errorMaskFiltering.isChecked()
+        }
+        # Here the well data contains tha wells, the selected points and the filter points (which are the background points)
         self.well_data = localization(self.preprocessing_params, self.localization_params, 
                                 self.raw_wells, self.selected_range, 
                                 {} if not self.preprocessing_params['drift_correction']['background_selector'] else background_selector.selected_coords)
@@ -183,6 +188,8 @@ class CardioBioEvalWidget(QWidget):
 
         self.viewer.layers.select_all()
         self.viewer.layers.remove_selected()
+
+        # TODO kiválasztott sejtről a plot
         
         # visualize the data with peaks
         for name in self.remaining_wells:
