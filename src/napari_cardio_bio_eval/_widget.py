@@ -18,15 +18,19 @@ Replace code below according to your needs.
 """
 from typing import TYPE_CHECKING
 
-from qtpy.QtWidgets import QWidget,QHBoxLayout, QFormLayout, QPushButton, QLineEdit, QFileDialog, QLabel, QSpinBox, QComboBox, QCheckBox
 import os
-from magicgui.widgets import CheckBox, Container, create_widget
-from skimage.util import img_as_float
+import napari
+import matplotlib.pyplot as plt
+import numpy as np
+
+from qtpy.QtWidgets import QWidget, QHBoxLayout, QFormLayout, QPushButton, QLineEdit, QFileDialog, QLabel, QSpinBox, QComboBox, QCheckBox
+
 from nanobio_core.epic_cardio.processing import *
 from nanobio_core.epic_cardio.defs import WELL_NAMES
 from nanobio_core.kiertekelo.export import export_results
-import napari
+
 from napari.qt.threading import thread_worker
+from matplotlib.backends.backend_qt5agg import FigureCanvas
 
 
 class CardioBioEvalWidget(QWidget):
@@ -199,6 +203,29 @@ class CardioBioEvalWidget(QWidget):
             self.viewer.add_points(self.invert_coords(self.well_data[name][1]), name=name + ' peaks', size=1, face_color='red', visible=visible)
             # filter points for background selection
             # self.viewer.add_points(self.invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
+
+        current_line = self.get_cell_line_by_coords(self.remaining_wells[0], 0, 0)
+
+        # create mpl figure with subplots
+        mpl_fig = plt.figure()
+        ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
+        (line,) = ax.plot(self.time, current_line)
+        # add the figure to the viewer as a FigureCanvas widget
+        self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig))
+
+
+        for layer in self.viewer.layers:
+            @layer.mouse_double_click_callbacks.append
+            def update_plot_on_double_click(layer, event):
+                try:
+                    name = layer.name.split(' ')[0]
+                    ax.clear()
+                    current_line = self.get_cell_line_by_coords(name, int(event.position[1]), int(event.position[2]))
+                    (line,) = ax.plot(self.time, current_line)
+                    ax.set_title(f"Well: {name}, Cell: [{int(event.position[1])} {int(event.position[2])}]")
+                    line.figure.canvas.draw()
+                except IndexError:
+                    pass
         
 
     def exportData(self):
@@ -249,3 +276,10 @@ class CardioBioEvalWidget(QWidget):
     def export_res(self):
         export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss, #backgroung selectorból
                         self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
+
+    def get_cell_line_by_coords(self, well_name, x, y):
+        current_line = self.well_data[well_name][0][:, x, y].copy()
+        if len(self.phases) > 0:
+            for p in self.phases:
+                current_line[p] = np.nan
+        return current_line
