@@ -4,7 +4,6 @@ qtpy
 scikit-image
 matplotlib==3.8
 
-[testing]
 tox
 pytest
 pytest-cov
