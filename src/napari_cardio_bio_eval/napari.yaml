@@ -1,7 +1,7 @@
 name: napari-cardio-bio-eval
 display_name: Cardio Biosensor Evaluation
 # use 'hidden' to remove plugin from napari hub search results
-visibility: public
+visibility: hidden
 # see https://napari.org/stable/plugins/manifest.html for valid categories
 categories: ["Annotation", "Segmentation", "Acquisition"]
 contributions:
@@ -22,21 +22,6 @@ contributions:
       python_name: napari_cardio_bio_eval:CardioBioEvalWidget
       title: Data load nad processing widget
 
-  readers:
-    - command: napari-cardio-bio-eval.get_reader
-      accepts_directories: true
-      filename_patterns: []
-  writers:
-    - command: napari-cardio-bio-eval.write_multiple
-      layer_types: ['image*','labels*']
-      filename_extensions: []
-    - command: napari-cardio-bio-eval.write_single_image
-      layer_types: ['image']
-      filename_extensions: ['.npy']
-  sample_data:
-    - command: napari-cardio-bio-eval.make_sample_data
-      display_name: Cardio Biosensor Evaluation
-      key: unique_id.1
   widgets:
     - command: napari-cardio-bio-eval.cardio_bio_eval_widget
       display_name: Cardio Bio Eval Widget
