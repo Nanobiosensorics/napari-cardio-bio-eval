@@ -1,4 +1,6 @@
 import numpy as np
+import napari
+import matplotlib
 
 from napari_cardio_bio_eval._widget import (
     CardioBioEvalWidget,
