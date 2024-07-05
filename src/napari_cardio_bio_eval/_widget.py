@@ -3,7 +3,10 @@ import napari
 import matplotlib.pyplot as plt
 import numpy as np
 
-from qtpy.QtWidgets import QWidget, QHBoxLayout, QFormLayout, QPushButton, QLineEdit, QFileDialog, QLabel, QSpinBox, QComboBox, QCheckBox, QProgressBar
+from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout, 
+                            QPushButton, QLineEdit, QFileDialog, 
+                            QLabel, QSpinBox, QComboBox, QCheckBox, 
+                            QProgressBar, QFrame)
 
 from nanobio_core.epic_cardio.processing import RangeType, load_data, load_params, preprocessing, localization, save_params
 from nanobio_core.epic_cardio.defs import WELL_NAMES
@@ -23,6 +26,10 @@ class CardioBioEvalWidget(QWidget):
         self.layout = QFormLayout(self)
 
         # Directory selection
+        dataLoadingLabel = QLabel('Data loading:')
+        dataLoadingLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
+        self.layout.addRow(dataLoadingLabel)
+
         self.browseBox = QHBoxLayout()
         self.dirLineEdit = QLineEdit(self)
         self.browseButton = QPushButton('Browse', self)
@@ -54,11 +61,18 @@ class CardioBioEvalWidget(QWidget):
         self.layout.addRow(self.loadButton)
 
         # Manual Background selection
-        self.backgroundSelectorButton = QPushButton('Manual Background Selection', self)
+        manBGsel = QLabel('Manual background selection if needed:')
+        manBGsel.setStyleSheet("QLabel { font-size: 10pt; font-weight: bold; }")
+        self.layout.addRow(manBGsel)
+        self.backgroundSelectorButton = QPushButton('Select Background Points Manually', self)
         self.backgroundSelectorButton.clicked.connect(self.manualBackgroundSelection)
         self.layout.addRow(self.backgroundSelectorButton)
 
         # Peak detection parameters
+        peakDetLabel = QLabel('Peak detection parameters:')
+        peakDetLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
+        self.layout.addRow(peakDetLabel)
+
         self.neighbourhood_size = QSpinBox(self)
         self.neighbourhood_size.setMinimum(0)
         self.neighbourhood_size.setMaximum(10)
@@ -68,11 +82,15 @@ class CardioBioEvalWidget(QWidget):
         self.errorMaskFiltering.setChecked(True)
         self.layout.addRow(self.errorMaskFiltering)
         # Peak detection button
-        self.peakButton = QPushButton('Peak Detection', self)
+        self.peakButton = QPushButton('Detect Signal Peaks', self)
         self.peakButton.clicked.connect(self.peakDetection)
         self.layout.addRow(self.peakButton)
 
         # Export parameters
+        dataLoadingLabel = QLabel('Exporting options:')
+        dataLoadingLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
+        self.layout.addRow(dataLoadingLabel)
+
         self.coordinates = QCheckBox('Coordinates', self)
         self.coordinates.setChecked(True)
         self.layout.addRow(self.coordinates)
