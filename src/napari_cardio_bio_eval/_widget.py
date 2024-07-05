@@ -1,31 +1,11 @@
-"""
-This module contains four napari widgets declared in
-different ways:
-
-- a `magicgui.widgets.Container` subclass. This provides lots
-    of flexibility and customization options while still supporting
-    `magicgui` widgets and convenience methods for creating widgets
-    from type annotations. If you want to customize your widgets and
-    connect callbacks, this is the best widget option for you.
-- a `QWidget` subclass. This provides maximal flexibility but requires
-    full specification of widget layouts, callbacks, events, etc.
-
-References:
-- Widget specification: https://napari.org/stable/plugins/guides.html?#widgets
-- magicgui docs: https://pyapp-kit.github.io/magicgui/
-
-Replace code below according to your needs.
-"""
-from typing import TYPE_CHECKING
-
 import os
 import napari
 import matplotlib.pyplot as plt
 import numpy as np
 
-from qtpy.QtWidgets import QWidget, QHBoxLayout, QFormLayout, QPushButton, QLineEdit, QFileDialog, QLabel, QSpinBox, QComboBox, QCheckBox
+from qtpy.QtWidgets import QWidget, QHBoxLayout, QFormLayout, QPushButton, QLineEdit, QFileDialog, QLabel, QSpinBox, QComboBox, QCheckBox, QProgressBar
 
-from nanobio_core.epic_cardio.processing import *
+from nanobio_core.epic_cardio.processing import RangeType, load_data, load_params, preprocessing, localization, save_params
 from nanobio_core.epic_cardio.defs import WELL_NAMES
 from nanobio_core.kiertekelo.export import export_results
 
@@ -128,11 +108,15 @@ class CardioBioEvalWidget(QWidget):
         self.layout.addRow(self.signalPartsByPhases)
         self.maxCenteredSignals = QCheckBox('Max Centered Signals', self)
         self.layout.addRow(self.maxCenteredSignals)
-
+        # Export button
         self.exportButton = QPushButton('Export Data', self)
         self.exportButton.clicked.connect(self.exportData)
         self.layout.addRow(self.exportButton)
-
+        # Export progress bar
+        self.progressBar = QProgressBar(self)
+        self.progressBar.setMinimum(0)
+        self.progressBar.setMaximum(1)
+        self.layout.addRow(self.progressBar)
 
     def openFileNameDialog(self):
         # TODO check the selected directory for the needed files if neccecary (in data_load function it does)
@@ -196,7 +180,7 @@ class CardioBioEvalWidget(QWidget):
             'signal_parts_by_phases': self.signalPartsByPhases.isChecked(),
             'max_centered_signals': self.maxCenteredSignals.isChecked()
         }
-
+        self.progressBar.setMaximum(0)
         self.remaining_wells = self.remaining_wells_from_layers()
         self.selected_ptss = self.get_selected_points()
 
@@ -206,11 +190,10 @@ class CardioBioEvalWidget(QWidget):
         save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
 
         exporter = self.export_res()
-        exporter.finished.connect(lambda: print('Export finished!'))
+        exporter.finished.connect(lambda: self.progressBar.setMaximum(1))
         # exporter.finished.connect(lambda: self.viewer.notifications.show('Export finished!'))
         exporter.start()
 
-        
     def clear_layers(self):
         self.viewer.layers.select_all()
         self.viewer.layers.remove_selected()
@@ -299,8 +282,8 @@ class CardioBioEvalWidget(QWidget):
         ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
         (line,) = ax.plot(self.time, current_line)
         # add the figure to the viewer as a FigureCanvas widget
-        self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig))
-
+        docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig))
+        docked_plot.setMinimumSize(200, 300)
 
         for layer in self.viewer.layers:
             @layer.mouse_double_click_callbacks.append
@@ -314,7 +297,6 @@ class CardioBioEvalWidget(QWidget):
                     line.figure.canvas.draw()
                 except IndexError:
                     pass
-
 
     @thread_worker
     def export_res(self):
