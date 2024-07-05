@@ -1,6 +1,8 @@
 numpy
+pandas
 magicgui
 qtpy
+scipy
 scikit-image
 matplotlib==3.8
 
