@@ -44,10 +44,17 @@ class CardioBioEvalWidget(QWidget):
         self.verticalFlip = QCheckBox('Vertical Flip', self)
         self.layout.addRow(self.verticalFlip)
 
+        self.layout.addRow(QLabel('Signal range:'))
+        self.rangeTypeSelect = QComboBox(self)
+        self.rangeTypeSelect.addItems(['Measurement phase', 'Individual point'])
+        self.layout.addRow(QLabel('Range type:'), self.rangeTypeSelect)
+        # self.rangeSelect = QComboBox(self) 
+        # self.layout.addRow(QLabel('Ranges:'), self.rangeSelect)
+
         self.layout.addRow(QLabel('Drift correction:'))
         self.threshold = QSpinBox(self)
-        self.threshold.setMinimum(0)
-        self.threshold.setMaximum(100)
+        self.threshold.setMinimum(25)
+        self.threshold.setMaximum(500)
         self.threshold.setValue(75)
         self.layout.addRow(QLabel('Threshold:'), self.threshold)
 
@@ -73,11 +80,24 @@ class CardioBioEvalWidget(QWidget):
         peakDetLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
         self.layout.addRow(peakDetLabel)
 
-        self.neighbourhood_size = QSpinBox(self)
-        self.neighbourhood_size.setMinimum(0)
-        self.neighbourhood_size.setMaximum(10)
-        self.neighbourhood_size.setValue(3)
-        self.layout.addRow(QLabel('Neighbourhood size:'), self.neighbourhood_size)
+        self.thresholdRangeMin = QSpinBox(self)
+        self.thresholdRangeMin.setMinimum(25)
+        self.thresholdRangeMin.setMaximum(5000)
+        self.thresholdRangeMin.setValue(75)
+        self.layout.addRow(QLabel('Threshold range minimum:'), self.thresholdRangeMin)
+
+        self.thresholdRangeMax = QSpinBox(self)
+        self.thresholdRangeMax.setMinimum(25)
+        self.thresholdRangeMax.setMaximum(5000)
+        self.thresholdRangeMax.setValue(3000)
+        self.layout.addRow(QLabel('Threshold range maximum:'), self.thresholdRangeMax)
+
+        self.neighbourhoodSize = QSpinBox(self)
+        self.neighbourhoodSize.setMinimum(1)
+        self.neighbourhoodSize.setMaximum(10)
+        self.neighbourhoodSize.setValue(3)
+        self.layout.addRow(QLabel('Neighbourhood size:'), self.neighbourhoodSize)
+
         self.errorMaskFiltering = QCheckBox('Error Mask Filtering', self)
         self.errorMaskFiltering.setChecked(True)
         self.layout.addRow(self.errorMaskFiltering)
@@ -147,8 +167,8 @@ class CardioBioEvalWidget(QWidget):
         self.preprocessing_params = {
             'flip': [self.horizontalFlip.isChecked(), self.verticalFlip.isChecked()],
             'signal_range' : {
-            'range_type': RangeType.MEASUREMENT_PHASE,
-            'ranges': [0, None],
+            'range_type': RangeType.MEASUREMENT_PHASE if rangeTypeSelect.currentText() == 'Measurement phase' else RangeType.INDIVIDUAL_POINT,
+            'ranges': [0, None], # TODO: implement range selection
             },
             'drift_correction': {
             'threshold': self.threshold.value(),
@@ -175,8 +195,8 @@ class CardioBioEvalWidget(QWidget):
 
     def peakDetection(self):
         self.localization_params = {
-            'threshold_range' : [.075*1000, 3*1000],
-            'neighbourhood_size': self.neighbourhood_size.value(),
+            'threshold_range' : [self.thresholdRangeMin.value(), self.thresholdRangeMax.value()],
+            'neighbourhood_size': self.neighbourhoodSize.value(),
             'error_mask_filtering': self.errorMaskFiltering.isChecked()
         }
 

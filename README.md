@@ -3,7 +3,7 @@
 [![License BSD-3](https://img.shields.io/pypi/l/napari-cardio-bio-eval.svg?color=green)](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/napari-cardio-bio-eval.svg?color=green)](https://pypi.org/project/napari-cardio-bio-eval)
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-cardio-bio-eval.svg?color=green)](https://python.org)
-[![tests](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/workflows/tests/badge.svg)](https://github.com//Nanobiosensoricsnapari-cardio-bio-eval/actions)
+[![tests](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/workflows/tests/badge.svg)](https://github.com//Nanobiosensorics/napari-cardio-bio-eval/actions)
 [![codecov](https://codecov.io/gh/Nanobiosensorics/napari-cardio-bio-eval/branch/main/graph/badge.svg)](https://codecov.io/gh/Nanobiosensorics/napari-cardio-bio-eval)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-cardio-bio-eval)](https://napari-hub.org/plugins/napari-cardio-bio-eval)
 
