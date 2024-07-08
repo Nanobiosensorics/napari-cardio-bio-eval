@@ -73,6 +73,7 @@ class CardioBioEvalWidget(QWidget):
         self.layout.addRow(manBGsel)
         self.backgroundSelectorButton = QPushButton('Select Background Points Manually', self)
         self.backgroundSelectorButton.clicked.connect(self.manualBackgroundSelection)
+        self.backgroundSelectorButton.setEnabled(False)
         self.layout.addRow(self.backgroundSelectorButton)
 
         # Peak detection parameters
@@ -104,6 +105,7 @@ class CardioBioEvalWidget(QWidget):
         # Peak detection button
         self.peakButton = QPushButton('Detect Signal Peaks', self)
         self.peakButton.clicked.connect(self.peakDetection)
+        self.peakButton.setEnabled(False)
         self.layout.addRow(self.peakButton)
 
         # Export parameters
@@ -149,6 +151,7 @@ class CardioBioEvalWidget(QWidget):
         # Export button
         self.exportButton = QPushButton('Export Data', self)
         self.exportButton.clicked.connect(self.exportData)
+        self.exportButton.setEnabled(False)
         self.layout.addRow(self.exportButton)
         # Export progress bar
         self.progressBar = QProgressBar(self)
@@ -167,8 +170,8 @@ class CardioBioEvalWidget(QWidget):
         self.preprocessing_params = {
             'flip': [self.horizontalFlip.isChecked(), self.verticalFlip.isChecked()],
             'signal_range' : {
-            'range_type': RangeType.MEASUREMENT_PHASE if rangeTypeSelect.currentText() == 'Measurement phase' else RangeType.INDIVIDUAL_POINT,
-            'ranges': [0, None], # TODO: implement range selection
+            'range_type': RangeType.MEASUREMENT_PHASE if self.rangeTypeSelect.currentText() == 'Measurement phase' else RangeType.INDIVIDUAL_POINT,
+            'ranges': [0, None], # TODO: implement range selection:  0 - phases[-1]+1 -> ez csak a preprocess után tudható 
             },
             'drift_correction': {
             'threshold': self.threshold.value(),
@@ -176,7 +179,7 @@ class CardioBioEvalWidget(QWidget):
             'background_selector': False,
             }
         }
-
+        self.cell_selector = False
         loader = self.loadAndPreprocessData_thread()
         loader.finished.connect(self.loadAndPreprocessData_GUI)
         loader.start()
@@ -189,7 +192,10 @@ class CardioBioEvalWidget(QWidget):
 
         for name in WELL_NAMES:
             visible = (name == WELL_NAMES[0])
-            self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
+            if self.cell_selector:
+                self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
+            else:
+                self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
             self.viewer.add_points(self.invert_coords(self.filter_ptss[name]), name=name + ' bg points', size=1, face_color='orange', visible=visible)
 
 
@@ -200,6 +206,7 @@ class CardioBioEvalWidget(QWidget):
             'error_mask_filtering': self.errorMaskFiltering.isChecked()
         }
 
+        self.cell_selector = True
         peak_detector = self.peakDetection_thread()
         peak_detector.finished.connect(self.peakDetection_GUI)
         peak_detector.start()
@@ -240,7 +247,6 @@ class CardioBioEvalWidget(QWidget):
         return np.array([[y, x] for x, y in coords])
 
     def set_buttons_enabled(self, state):
-        self.loadButton.setEnabled(state)
         self.backgroundSelectorButton.setEnabled(state)
         self.peakButton.setEnabled(state)
         self.exportButton.setEnabled(state)
@@ -268,8 +274,6 @@ class CardioBioEvalWidget(QWidget):
     @thread_worker
     def loadAndPreprocessData_thread(self):
         self.set_buttons_enabled(False)
-        self.loadButton.setEnabled(True)
- 
         path = self.dirLineEdit.text()
         self.RESULT_PATH = os.path.join(path, 'result')
         if not os.path.exists(self.RESULT_PATH):
@@ -278,8 +282,6 @@ class CardioBioEvalWidget(QWidget):
         self.raw_wells, self.full_time, self.full_phases = load_data(path, flip=self.preprocessing_params['flip'])
         self.filter_params, _, _ = load_params(self.RESULT_PATH)
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
-        
-        self.set_buttons_enabled(True)
 
     def loadAndPreprocessData_GUI(self):
         self.clear_layers()
@@ -287,10 +289,12 @@ class CardioBioEvalWidget(QWidget):
             visible = (name == WELL_NAMES[0])
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
 
+        self.peakButton.setEnabled(True)
+        self.backgroundSelectorButton.setEnabled(True)
+
     @thread_worker
     def peakDetection_thread(self):
         self.set_buttons_enabled(False)
-
         if self.preprocessing_params['drift_correction']['background_selector']:
             self.filter_ptss = self.get_filter_points()
 
@@ -300,7 +304,6 @@ class CardioBioEvalWidget(QWidget):
                                     self.filter_ptss)
 
         self.remaining_wells = self.remaining_wells_from_layers()
-        self.set_buttons_enabled(True)
 
     def peakDetection_GUI(self):
         self.clear_layers()
@@ -335,6 +338,8 @@ class CardioBioEvalWidget(QWidget):
                     line.figure.canvas.draw()
                 except IndexError:
                     pass
+        
+        self.set_buttons_enabled(True)
 
     @thread_worker
     def export_res(self):

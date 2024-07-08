@@ -35,11 +35,12 @@ def load_measurement(dir_path):
     
     print(f"Measurement mode {meas_mode}")
     
-    fr = open( wl_power_path, "rb")
-    init_map = np.frombuffer(fr.read(614400), dtype='float32' if meas_mode == 'normal' else 'uint16')
+    # fr = open( wl_power_path, "rb")
+    with open(wl_power_path, "rb") as fr:
+        init_map = np.frombuffer(fr.read(614400), dtype='float32' if meas_mode == 'normal' else 'uint16')
     print(init_map.shape)
     init_wl_map = np.reshape(init_map[:76800], [240, 320])
-    fr.close()
+    # fr.close()
 
     sorted_files = os.listdir(os.path.join(dir_path, 'DMR'))
     
@@ -51,10 +52,12 @@ def load_measurement(dir_path):
 
     timestep_mats = np.zeros([len(sorted_files),240,320])
     for i in range(len(sorted_files)):
-        step = open(os.path.join(dir_path, f'DMR/{i + 1}'), 'rb')
-        A_int = np.frombuffer(step.read(153600), dtype='uint16' if meas_mode == 'normal' else 'uint8')
+        # step = open(os.path.join(dir_path, f'DMR/{i + 1}'), 'rb')
+        file_path = os.path.join(dir_path, f'DMR/{i + 1}')
+        with open(file_path, 'rb') as step:
+            A_int = np.frombuffer(step.read(153600), dtype='uint16' if meas_mode == 'normal' else 'uint8')
         timestep_mats[i,:,:] = np.reshape(A_int,[240,320])
-        step.close()
+        # step.close()
 
     WL_map = np.tile(init_wl_map, [len(timestep_mats),1, 1]) + S*(timestep_mats-np.tile(timestep_mats[0,:,:],[len(timestep_mats),1,1]))
 
