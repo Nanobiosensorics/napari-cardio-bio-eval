@@ -6,7 +6,7 @@ import numpy as np
 from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout, 
                             QPushButton, QLineEdit, QFileDialog, 
                             QLabel, QSpinBox, QComboBox, QCheckBox, 
-                            QProgressBar, QFrame)
+                            QProgressBar)
 
 from nanobio_core.epic_cardio.processing import RangeType, load_data, load_params, preprocessing, localization, save_params
 from nanobio_core.epic_cardio.defs import WELL_NAMES
@@ -184,7 +184,6 @@ class CardioBioEvalWidget(QWidget):
         loader.finished.connect(self.loadAndPreprocessData_GUI)
         loader.start()
 
-    # Manual Background selection here if the automatic is bad
     def manualBackgroundSelection(self):
         self.preprocessing_params['drift_correction']['background_selector'] = True
 
@@ -198,6 +197,7 @@ class CardioBioEvalWidget(QWidget):
                 self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
             self.viewer.add_points(self.invert_coords(self.filter_ptss[name]), name=name + ' bg points', size=1, face_color='orange', visible=visible)
 
+        self.loadButton.setEnabled(False)
 
     def peakDetection(self):
         self.localization_params = {
@@ -340,6 +340,7 @@ class CardioBioEvalWidget(QWidget):
                     pass
         
         self.set_buttons_enabled(True)
+        self.loadButton.setEnabled(False)
 
     @thread_worker
     def export_res(self):
