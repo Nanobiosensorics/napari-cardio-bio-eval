@@ -264,12 +264,12 @@ class CardioBioEvalWidget(QWidget):
         return selected_ptss
 
     def remaining_wells_from_layers(self):
-        remaining_wells = []
-        for layer in self.viewer.layers:
-            # if 'peaks' not in layer.name or 'bg' not in layer.name:
-            if  len(layer.name.split()) == 1:
-                remaining_wells.append(layer.name)
-        return remaining_wells        
+        peak_layers = [layer.name for layer in self.viewer.layers if 'peaks' in layer.name]
+        remaining_wells = [layer.name for layer in self.viewer.layers if len(layer.name.split()) == 1]
+        if len(peak_layers) == 0:
+            return remaining_wells
+        remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + ' peaks') for peak in peak_layers)]
+        return remaining_wells
 
     @thread_worker
     def loadAndPreprocessData_thread(self):
@@ -316,7 +316,7 @@ class CardioBioEvalWidget(QWidget):
             # filter points for background selection
             # self.viewer.add_points(self.invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
 
-        current_line = self.get_cell_line_by_coords(self.remaining_wells[0], 0, 0)
+        current_line = self.get_cell_line_by_coords(self.remaining_wells[-1], 0, 0)
 
         # create mpl figure with subplots
         mpl_fig = plt.figure()
