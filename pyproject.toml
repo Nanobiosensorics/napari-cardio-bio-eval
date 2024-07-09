@@ -5,8 +5,8 @@ description = "The evaluation of the epic cardio biosensor integrated into napar
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-  {name = "David Wittmajer"},
-  {email = "wittmajerd@gmail.com"},
+  {name = "Nanobiosensorics"},
+  {email = "horvath.robert@energia.mta.hu"},
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
