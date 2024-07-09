@@ -26,6 +26,7 @@ requires-python = ">=3.10"
 dependencies = [
     "matplotlib==3.8",
     "opencv-python",
+    "openpyxl",
 ]
 
 [project.optional-dependencies]

@@ -1,9 +1,7 @@
-numpy
-pandas
-magicgui
 qtpy
 matplotlib==3.8
 opencv-python
+openpyxl
 
 tox
 pytest
