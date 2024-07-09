@@ -1,5 +1,6 @@
 qtpy
 matplotlib==3.8
+opencv-python
 
 tox
 pytest
