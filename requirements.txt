@@ -1,4 +1,14 @@
+numpy
+pandas
+magicgui
+qtpy
 matplotlib==3.8
 opencv-python
+
+tox
+pytest
+pytest-cov
+pytest-qt
+pyqt5
 napari
 napari-plugin-engine
