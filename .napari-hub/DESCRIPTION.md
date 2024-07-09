@@ -29,8 +29,6 @@ You can open the plugin's widget from the **Plugins** menu after the installatio
 
 ## Data loading and preprocessing
 
-![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/e69a58cf-4867-4e51-8b57-135e30cd6528)
-
 At the top of the widget, you need to select the directory, which contains the data you want to examine and process. To successfully load the data the directory have to contain the following files:
 - *_wl_power.file: which contains the starting values of the measurement
 - DRM directory: which contains the difference from the previous measurement point 
