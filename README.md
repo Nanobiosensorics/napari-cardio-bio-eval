@@ -35,10 +35,13 @@ First install a fresh conda enviroment (or other python enviroment) and activate
     conda create -y -n napari-env -c conda-forge python=3.10
     conda activate napari-env
 
-Then you can pip install napari and the plugin from the github repository:
+Then you can pip install the plugin from the github repository and it will also downloads the necessary packages:
 
     pip install git+https://github.com/Nanobiosensorics/napari-cardio-bio-eval
 
+Then you can start napari with a simple command:
+
+    napari
 
 # Usage
 
