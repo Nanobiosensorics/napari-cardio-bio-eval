@@ -27,7 +27,7 @@ dependencies = [
     "matplotlib",
     "opencv-python",
     "openpyxl",
-    "napari",
+    "napari[pyqt5]",
 ]
 
 [project.optional-dependencies]

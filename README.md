@@ -38,7 +38,6 @@ First install a fresh conda enviroment (or other python enviroment) and activate
 Then you can pip install napari and the plugin from the github repository:
 
     pip install git+https://github.com/Nanobiosensorics/napari-cardio-bio-eval
-    pip install "napari[pyqt5]"
 
 
 # Usage
