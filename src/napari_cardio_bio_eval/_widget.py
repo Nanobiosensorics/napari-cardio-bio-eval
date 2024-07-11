@@ -10,7 +10,7 @@ from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout,
 
 from nanobio_core.epic_cardio.processing import RangeType, load_data, load_params, preprocessing, localization, save_params
 from nanobio_core.epic_cardio.defs import WELL_NAMES
-from nanobio_core.kiertekelo.export import export_results
+from export_and_plot.export import export_results
 
 from napari.qt.threading import thread_worker
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -160,7 +160,6 @@ class CardioBioEvalWidget(QWidget):
         self.layout.addRow(self.progressBar)
 
     def openFileNameDialog(self):
-        # TODO check the selected directory for the needed files if neccecary (in data_load function it does)
         options = QFileDialog.Options()
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
         if directory:
