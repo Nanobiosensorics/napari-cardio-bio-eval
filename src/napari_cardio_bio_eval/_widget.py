@@ -50,7 +50,7 @@ class CardioBioEvalWidget(QWidget):
         self.loadButton = QPushButton('Load Data', self)
         self.loadButton.clicked.connect(self.loadData)
         self.layout.addRow(self.loadButton)
-
+        # Range type selection, the change function is added in the loadData function after the data is loaded
         self.layout.addRow(QLabel('Select signal range:'))
         self.rangeLabel = QLabel('Phases: , Time: ')
         self.layout.addRow(self.rangeLabel)
@@ -59,7 +59,7 @@ class CardioBioEvalWidget(QWidget):
         self.rangeTypeSelect.setEnabled(False)
         self.rangeTypeSelect.setCurrentIndex(1)
         self.layout.addRow(QLabel('Range type:'), self.rangeTypeSelect)
-        
+        # Range thresholds the minimum is always 0, the maximum is set in the loadData function when the data is loaded
         self.rangesBox = QHBoxLayout()
         self.rangeMin = QSpinBox(self)
         self.rangeMin.setMinimum(0)
@@ -217,7 +217,7 @@ class CardioBioEvalWidget(QWidget):
         self.raw_wells, self.full_time, self.full_phases = load_data(path, flip=self.preprocessing_params['flip'])
         self.filter_params, _, _ = load_params(self.RESULT_PATH)
 
-        self.rangeLabel.setText(f'Phases: {self.full_phases}, Time: {len(self.full_time)}')
+        self.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(self.full_phases)]}, Time: {len(self.full_time)}')
         self.rangeTypeSelect.currentIndexChanged.connect(self.rangeTypeChanged)
         # Enable the range selection
         self.rangeTypeSelect.setEnabled(True)
@@ -241,6 +241,7 @@ class CardioBioEvalWidget(QWidget):
         else:
             self.preprocessing_params['signal_range']['range_type'] = RangeType.INDIVIDUAL_POINT
 
+        # It means that the range is set to the last phase or time point, it would be out of index
         if self.rangeMax.value() == len(self.full_phases)+1:
             self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), None]
         else:
@@ -364,7 +365,6 @@ class CardioBioEvalWidget(QWidget):
 
         exporter = self.export_res()
         exporter.finished.connect(lambda: self.progressBar.setMaximum(1))
-        # exporter.finished.connect(lambda: self.viewer.notifications.show('Export finished!'))
         exporter.start()
 
     @thread_worker
@@ -413,10 +413,12 @@ class CardioBioEvalWidget(QWidget):
 
     def rangeTypeChanged(self):
         if self.rangeTypeSelect.currentIndex() == 0:
-            self.rangeMin.setMaximum(len(self.full_phases))
-            self.rangeMax.setMaximum(len(self.full_phases)+1)
-            self.rangeMax.setValue(len(self.full_phases))
+            num_of_phases = len(self.full_phases)
+            self.rangeMin.setMaximum(num_of_phases)
+            self.rangeMax.setMaximum(num_of_phases + 1)
+            self.rangeMax.setValue(num_of_phases + 1)
         else:
-            self.rangeMin.setMaximum(len(self.full_time))
-            self.rangeMax.setMaximum(len(self.full_time))
-            self.rangeMax.setValue(len(self.full_time))
+            frame_count = len(self.full_time)
+            self.rangeMin.setMaximum(frame_count)
+            self.rangeMax.setMaximum(frame_count)
+            self.rangeMax.setValue(frame_count)
