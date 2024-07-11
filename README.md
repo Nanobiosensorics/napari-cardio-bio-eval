@@ -1,17 +1,17 @@
 # Cardio biosensor evaluaton in Napari
-
+<!--
 [![License BSD-3](https://img.shields.io/pypi/l/napari-cardio-bio-eval.svg?color=green)](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/napari-cardio-bio-eval.svg?color=green)](https://pypi.org/project/napari-cardio-bio-eval)
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-cardio-bio-eval.svg?color=green)](https://python.org)
 [![tests](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/workflows/tests/badge.svg)](https://github.com//Nanobiosensorics/napari-cardio-bio-eval/actions)
-<!--[![codecov](https://codecov.io/gh/Nanobiosensorics/napari-cardio-bio-eval/branch/main/graph/badge.svg)](https://codecov.io/gh/Nanobiosensorics/napari-cardio-bio-eval)-->
+[![codecov](https://codecov.io/gh/Nanobiosensorics/napari-cardio-bio-eval/branch/main/graph/badge.svg)](https://codecov.io/gh/Nanobiosensorics/napari-cardio-bio-eval)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-cardio-bio-eval)](https://napari-hub.org/plugins/napari-cardio-bio-eval)
 
-This plugin provides a widget which can load, preprocess, annotate and export cardio biosensor data.  
-
-----------------------------------
-
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
+
+------------------------------------>
+
+The plugin provides a widget which can load, preprocess, annotate and export cardio biosensor data.  
 
 <!--
 Don't miss the full getting started guide to set up your new package:
@@ -58,18 +58,28 @@ At the top of the widget, you need to select the directory, which contains the d
 
 #### Import parameters:  
 - Flipping: horizontal and vertical mirroring of the biosensor recording
-- Signal range type: measurement phase, individual point
-- Ranges???
-- Drift correction threshold: 25-500
+- Signal range type: with this you can choose how do you want to select a smaller range of the measurement in the next field *Ranges*
+    - measurement phase: you can give the index of the phases you want to see, for example with 0-1 you can view the measurement from the start to the first pause
+    - individual point: you can select any given frames in an interval, for example with selecting 34 and 275 you can view the measurement from frame 34 to frame 275
+- Ranges: if you choose measurement phase then give the range of the phases you want to see and if you choose individual point then select the starting and end frames. The label above helps as it shows the phrases (except the last one) and the full time of the measurement. The minimum frame or phase must be smaller than the maximum.
+- Drift correction threshold: Ranges between 25 and 500.
 - Filter method: mean or median
 
-Beside the source directory you can set the import parameters and then click the ***Load and Preprocess Data*** button. After a few seconds the well images will appear on the viewer.  
+![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/28b5f563-1c5e-4591-bdf6-2ece936becac)
 
-![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/ab308f8c-cd3d-4e2c-a671-f001983a1326)
+![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/a6004667-deac-4ff8-8729-0fcb8bc35f7f)
 
-Each well has its own layer. You can turn the layers visible or invisible by clicking  on the small eye icon next to each layer. If you do not need any of the wells then you can delete its layer and it won't appear in the next steps and also won't be exported.
+After selecting the source directory and the optional fliping you can load in the data with the ***Load Data*** button. After the raw data is loaded you can select the slice of the measurement you want to work with and some other parameters. Then by clicking the ***Preprocess Data*** button you start the processing and after a few seconds the well images will appear on the viewer.  
 
-After you see the wells you can proceed to the next step or if the background correction is not good enough you can click the ***Select Background Points Manually*** button and it will show the automatically selected background points for each well, which you can move to real background coordinates and in the next step, in another background correction step, these points will be used by the algorithm. After the first export these points will be saved so if the same directory is loaded a second time the preprocessing will use these points.
+![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/23e38c70-d058-41cc-9e9e-f2d34ea553e0)
+
+Each well has its own layer. You can turn the layers visible or invisible by clicking the small eye icon on each layer. If you do not need any of the wells, then you can delete the layer and it won't appear in the next steps and also won't be exported.
+
+If the selected range is not what you wanted then you can change the parameters and preprocess again. But if you moved on to the next step (manual background selection or peak detection) then you need to restart Napari to load other data or preprocess with different parameters.
+
+After you see the wells you can proceed to the next step or if the automatic background correction is not good enough you can click the ***Select Background Points Manually*** button and it will show the automatically selected background points for each well, which you can move to better background coordinates and in the next peak detection step these points will be used by the background correction algorithm. After the first export these points will be saved so if the same directory is loaded a second time the preprocessing will use these points.
+
+![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/133fd74a-b53b-4540-bdf9-209c325e2b4b)
 
 ## Selecting the cells
 
@@ -80,12 +90,12 @@ In this step you can also set some parameters for the peak detection algorithm a
 - Neighbourhood size: 1-10
 - Error mask filtering:
 
-![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/500216ca-2d45-470d-9f10-aed608a05b28)
+![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/842ad2e3-32dd-4d6c-8e98-47c137a7029b)
 
 Here you can delete, add or move the points on each points layer. There are keyboard shortcuts for easier use!  
 Additionally by double clicking on any point of the image you can examine the time-signal diagram of the selected point under the widget. Be sure to select the correct layer!
 
-After selecting the needed cells and wells (and deleting the unnecessary ones) you can export plots and additional values about them.
+After selecting the needed cells and wells (and deleting the unnecessary ones) you can export plots and additional information about them.
 
 ## Exporting
 
