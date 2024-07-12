@@ -20,6 +20,8 @@ class CardioBioEvalWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
         self.viewer = viewer
+        self._peaks = " peaks"
+        self._bg_points = " background points"
         self.initUI()
 
     def initUI(self):
@@ -33,7 +35,7 @@ class CardioBioEvalWidget(QWidget):
         self.browseBox = QHBoxLayout()
         self.dirLineEdit = QLineEdit(self)
         self.browseButton = QPushButton('Browse', self)
-        self.browseButton.clicked.connect(self.openFileNameDialog)
+        self.browseButton.clicked.connect(self.open_file_name_dialog)
         self.browseBox.addWidget(self.dirLineEdit)
         self.browseBox.addWidget(self.browseButton)
         self.layout.addRow(QLabel('Select Directory:'), self.browseBox)
@@ -48,9 +50,9 @@ class CardioBioEvalWidget(QWidget):
 
         # Data loading button
         self.loadButton = QPushButton('Load Data', self)
-        self.loadButton.clicked.connect(self.loadData)
+        self.loadButton.clicked.connect(self.load_data)
         self.layout.addRow(self.loadButton)
-        # Range type selection, the change function is added in the loadData function after the data is loaded
+        # Range type selection, the change function is added in the load_data function after the data is loaded
         self.layout.addRow(QLabel('Select signal range:'))
         self.rangeLabel = QLabel('Phases: , Time: ')
         self.layout.addRow(self.rangeLabel)
@@ -59,7 +61,7 @@ class CardioBioEvalWidget(QWidget):
         self.rangeTypeSelect.setEnabled(False)
         self.rangeTypeSelect.setCurrentIndex(1)
         self.layout.addRow(QLabel('Range type:'), self.rangeTypeSelect)
-        # Range thresholds the minimum is always 0, the maximum is set in the loadData function when the data is loaded
+        # Range thresholds the minimum is always 0, the maximum is set in the load_data function when the data is loaded
         self.rangesBox = QHBoxLayout()
         self.rangeMin = QSpinBox(self)
         self.rangeMin.setMinimum(0)
@@ -86,7 +88,7 @@ class CardioBioEvalWidget(QWidget):
         # Data processing button
         self.processButton = QPushButton('Preprocess Data', self)
         self.processButton.setEnabled(False)
-        self.processButton.clicked.connect(self.PreprocessData)
+        self.processButton.clicked.connect(self.preprocess_data)
         self.layout.addRow(self.processButton)
 
         # Manual Background selection
@@ -94,7 +96,7 @@ class CardioBioEvalWidget(QWidget):
         manBGsel.setStyleSheet("QLabel { font-size: 10pt; font-weight: bold; }")
         self.layout.addRow(manBGsel)
         self.backgroundSelectorButton = QPushButton('Select Background Points Manually', self)
-        self.backgroundSelectorButton.clicked.connect(self.manualBackgroundSelection)
+        self.backgroundSelectorButton.clicked.connect(self.manual_background_selection)
         self.backgroundSelectorButton.setEnabled(False)
         self.layout.addRow(self.backgroundSelectorButton)
 
@@ -127,7 +129,7 @@ class CardioBioEvalWidget(QWidget):
         self.layout.addRow(self.errorMaskFiltering)
         # Peak detection button
         self.peakButton = QPushButton('Detect Signal Peaks', self)
-        self.peakButton.clicked.connect(self.peakDetection)
+        self.peakButton.clicked.connect(self.peak_detection)
         self.peakButton.setEnabled(False)
         self.layout.addRow(self.peakButton)
 
@@ -173,7 +175,7 @@ class CardioBioEvalWidget(QWidget):
         self.layout.addRow(self.maxCenteredSignals)
         # Export button
         self.exportButton = QPushButton('Export Data', self)
-        self.exportButton.clicked.connect(self.exportData)
+        self.exportButton.clicked.connect(self.export_data)
         self.exportButton.setEnabled(False)
         self.layout.addRow(self.exportButton)
         # Export progress bar
@@ -182,13 +184,13 @@ class CardioBioEvalWidget(QWidget):
         self.progressBar.setMaximum(1)
         self.layout.addRow(self.progressBar)
 
-    def openFileNameDialog(self):
+    def open_file_name_dialog(self):
         options = QFileDialog.Options()
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
         if directory:
             self.dirLineEdit.setText(directory)
 
-    def loadData(self):
+    def load_data(self):
         self.preprocessing_params = {
             'flip': [self.horizontalFlip.isChecked(), self.verticalFlip.isChecked()],
             'signal_range' : {
@@ -203,11 +205,11 @@ class CardioBioEvalWidget(QWidget):
         }
 
         self.cell_selector = False
-        loader = self.load_thread()
+        loader = self.load_data_thread()
         loader.start()
 
     @thread_worker
-    def load_thread(self):
+    def load_data_thread(self):
         self.set_buttons_enabled(False)
         path = self.dirLineEdit.text()
         self.RESULT_PATH = os.path.join(path, 'result')
@@ -218,7 +220,7 @@ class CardioBioEvalWidget(QWidget):
         self.filter_params, _, _ = load_params(self.RESULT_PATH)
 
         self.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(self.full_phases)]}, Time: {len(self.full_time)}')
-        self.rangeTypeSelect.currentIndexChanged.connect(self.rangeTypeChanged)
+        self.rangeTypeSelect.currentIndexChanged.connect(self.range_type_changed)
         # Enable the range selection
         self.rangeTypeSelect.setEnabled(True)
         self.rangeMin.setEnabled(True)
@@ -229,13 +231,13 @@ class CardioBioEvalWidget(QWidget):
 
         self.processButton.setEnabled(True)
 
-    def PreprocessData(self):
-        preprocessor = self.PreprocessData_thread()
-        preprocessor.finished.connect(self.loadAndPreprocessData_GUI)
+    def preprocess_data(self):
+        preprocessor = self.preprocess_data_thread()
+        preprocessor.finished.connect(self.load_and_preprocess_data_GUI)
         preprocessor.start()
 
     @thread_worker
-    def PreprocessData_thread(self):
+    def preprocess_data_thread(self):
         if self.rangeTypeSelect.currentIndex() == 0:
             self.preprocessing_params['signal_range']['range_type'] = RangeType.MEASUREMENT_PHASE
         else:
@@ -250,7 +252,7 @@ class CardioBioEvalWidget(QWidget):
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
 
-    def loadAndPreprocessData_GUI(self):
+    def load_and_preprocess_data_GUI(self):
         self.clear_layers()
         for name in WELL_NAMES:
             visible = (name == WELL_NAMES[0])
@@ -260,7 +262,7 @@ class CardioBioEvalWidget(QWidget):
         self.backgroundSelectorButton.setEnabled(True)
     
 
-    def manualBackgroundSelection(self):
+    def manual_background_selection(self):
         self.preprocessing_params['drift_correction']['background_selector'] = True
 
         self.clear_layers()
@@ -271,13 +273,13 @@ class CardioBioEvalWidget(QWidget):
                 self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
             else:
                 self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_points(self.invert_coords(self.filter_ptss[name]), name=name + ' bg points', size=1, face_color='orange', visible=visible)
+            self.viewer.add_points(self.invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
 
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
 
 
-    def peakDetection(self):
+    def peak_detection(self):
         self.localization_params = {
             'threshold_range' : [self.thresholdRangeMin.value(), self.thresholdRangeMax.value()],
             'neighbourhood_size': self.neighbourhoodSize.value(),
@@ -285,12 +287,12 @@ class CardioBioEvalWidget(QWidget):
         }
 
         self.cell_selector = True
-        peak_detector = self.peakDetection_thread()
-        peak_detector.finished.connect(self.peakDetection_GUI)
+        peak_detector = self.peak_detection_thread()
+        peak_detector.finished.connect(self.peak_detection_GUI) 
         peak_detector.start()
 
     @thread_worker
-    def peakDetection_thread(self):
+    def peak_detection_thread(self):
         self.set_buttons_enabled(False)
         if self.preprocessing_params['drift_correction']['background_selector']:
             self.filter_ptss = self.get_filter_points()
@@ -302,14 +304,14 @@ class CardioBioEvalWidget(QWidget):
 
         self.remaining_wells = self.remaining_wells_from_layers()
 
-    def peakDetection_GUI(self):
+    def peak_detection_GUI(self):
         self.clear_layers()
         # visualize the data with peaks
         for name in self.remaining_wells:
             visible = (name == self.remaining_wells[0])
             self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
             # invert the coordinates of the peaks to plot in napari (later invert back for other plots)
-            self.viewer.add_points(self.invert_coords(self.well_data[name][1]), name=name + ' peaks', size=1, face_color='red', visible=visible)
+            self.viewer.add_points(self.invert_coords(self.well_data[name][1]), name=name + self._peaks, size=1, face_color='red', visible=visible)
             # filter points for background selection
             # self.viewer.add_points(self.invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
 
@@ -340,7 +342,7 @@ class CardioBioEvalWidget(QWidget):
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
 
-    def exportData(self):
+    def export_data(self):
         self.export_params = {
             'coordinates': self.coordinates.isChecked(),
             'preprocessed_signals': self.preprocessedSignals.isChecked(),
@@ -369,7 +371,7 @@ class CardioBioEvalWidget(QWidget):
 
     @thread_worker
     def export_res(self):
-        export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss, #backgroung selectorból
+        export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss,
                         self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
 
     def clear_layers(self):
@@ -387,13 +389,13 @@ class CardioBioEvalWidget(QWidget):
     def get_filter_points(self):
         filter_ptss = {}
         for name in WELL_NAMES:
-            filter_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + ' bg points'].data)).astype(np.uint8)
+            filter_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._bg_points].data)).astype(np.uint8)
         return filter_ptss
 
     def get_selected_points(self):
         selected_ptss = {}
         for name in self.remaining_wells:
-            selected_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + ' peaks'].data)).astype(np.uint8)
+            selected_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._peaks].data)).astype(np.uint8)
         return selected_ptss
 
     def remaining_wells_from_layers(self):
@@ -401,7 +403,7 @@ class CardioBioEvalWidget(QWidget):
         remaining_wells = [layer.name for layer in self.viewer.layers if len(layer.name.split()) == 1]
         if len(peak_layers) == 0:
             return remaining_wells
-        remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + ' peaks') for peak in peak_layers)]
+        remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + self._peaks) for peak in peak_layers)]
         return remaining_wells
 
     def get_cell_line_by_coords(self, well_name, x, y):
@@ -411,7 +413,7 @@ class CardioBioEvalWidget(QWidget):
                 current_line[p] = np.nan
         return current_line
 
-    def rangeTypeChanged(self):
+    def range_type_changed(self):
         if self.rangeTypeSelect.currentIndex() == 0:
             num_of_phases = len(self.full_phases)
             self.rangeMin.setMaximum(num_of_phases)
