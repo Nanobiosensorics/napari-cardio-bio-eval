@@ -272,12 +272,15 @@ class CardioBioEvalWidget(QWidget):
 
         for name in WELL_NAMES:
             visible = (name == WELL_NAMES[0])
+            # if the peak detection happened once the well_data contains more data: the wells, the selected points and the filter points
+            # so we need to select the first element of the tuple
             if self.cell_selector:
                 self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
             else:
                 self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
             self.viewer.add_points(self.invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
 
+        # Once the background selection is started new data cant be loaded
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
 
@@ -300,12 +303,12 @@ class CardioBioEvalWidget(QWidget):
             self.filter_ptss = self.get_filter_points()
         self.preprocessing_params['drift_correction']['background_selector'] = False
 
-        # Here the well data contains tha wells, the selected points and the filter points (which are the background points)
+        # From here the well data contains the wells, the selected points and the filter points (which are the background points)
         self.well_data = localization(self.preprocessing_params, self.localization_params, 
                                     self.raw_wells, self.selected_range, 
                                     self.filter_ptss)
 
-        self.remaining_wells = self.remaining_wells_from_layers()
+        self.remaining_wells = self.get_remaining_wells_from_layers()
 
     def peak_detection_GUI(self):
         self.clear_layers()
@@ -331,6 +334,8 @@ class CardioBioEvalWidget(QWidget):
         self.docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig), name='Cell signal plot')
         self.docked_plot.setMinimumSize(200, 300)
 
+        # add a double click callback to all of the layers
+        # the well name in the layer name is important to get the selected layer
         for layer in self.viewer.layers:
             @layer.mouse_double_click_callbacks.append
             def update_plot_on_double_click(layer, event):
@@ -344,6 +349,7 @@ class CardioBioEvalWidget(QWidget):
                 except IndexError:
                     pass
         
+        # Once the peak detection is started new data cant be loaded
         self.set_buttons_enabled(True)
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
@@ -363,8 +369,8 @@ class CardioBioEvalWidget(QWidget):
             'max_centered_signals': self.maxCenteredSignals.isChecked()
         }
         self.progressBar.setMaximum(0)
-        self.remaining_wells = self.remaining_wells_from_layers()
-        self.selected_ptss = self.get_selected_points()
+        self.remaining_wells = self.get_remaining_wells_from_layers()
+        self.selected_ptss = self.get_selected_cells()
 
         for name in self.remaining_wells:
             self.well_data[name] = (self.viewer.layers[name].data, self.selected_ptss[name], self.well_data[name][-1])
@@ -388,6 +394,7 @@ class CardioBioEvalWidget(QWidget):
         return np.array([[y, x] for x, y in coords])
 
     def set_buttons_enabled(self, state):
+        # state is a boolean
         self.backgroundSelectorButton.setEnabled(state)
         self.peakButton.setEnabled(state)
         self.exportButton.setEnabled(state)
@@ -398,13 +405,13 @@ class CardioBioEvalWidget(QWidget):
             filter_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._bg_points].data)).astype(np.uint8)
         return filter_ptss
 
-    def get_selected_points(self):
+    def get_selected_cells(self):
         selected_ptss = {}
         for name in self.remaining_wells:
             selected_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._peaks].data)).astype(np.uint8)
         return selected_ptss
 
-    def remaining_wells_from_layers(self):
+    def get_remaining_wells_from_layers(self):
         peak_layers = [layer.name for layer in self.viewer.layers if 'peaks' in layer.name]
         remaining_wells = [layer.name for layer in self.viewer.layers if len(layer.name.split()) == 1]
         if len(peak_layers) == 0:
