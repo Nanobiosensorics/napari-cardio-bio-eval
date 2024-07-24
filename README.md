@@ -73,11 +73,13 @@ After selecting the source directory and the optional fliping you can load in th
 
 ![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/23e38c70-d058-41cc-9e9e-f2d34ea553e0)
 
-Each well has its own layer. You can turn the layers visible or invisible by clicking the small eye icon on each layer. If you do not need any of the wells, then you can delete the layer and it won't appear in the next steps and also won't be exported.
+Each well has its own layer. You can turn the layers visible or invisible by clicking the small eye icon on each layer.
 
 If the selected range is not what you wanted then you can change the parameters and preprocess again. But if you moved on to the next step (manual background selection or peak detection) then you need to restart Napari to load other data or preprocess with different parameters.
 
 After you see the wells you can proceed to the next step or if the automatic background correction is not good enough you can click the ***Select Background Points Manually*** button and it will show the automatically selected background points for each well, which you can move to better background coordinates and in the next peak detection step these points will be used by the background correction algorithm. After the first export these points will be saved so if the same directory is loaded a second time the preprocessing will use these points.
+
+During the background selection do NOT delete any layers.
 
 ![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/133fd74a-b53b-4540-bdf9-209c325e2b4b)
 
@@ -92,9 +94,10 @@ In this step you can also set some parameters for the peak detection algorithm a
 
 ![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/842ad2e3-32dd-4d6c-8e98-47c137a7029b)
 
-Here you can delete, add or move the points on each points layer. There are keyboard shortcuts for easier use!  
-Additionally by double clicking on any point of the image you can examine the time-signal diagram of the selected point under the widget. Be sure to select the correct layer!
+Here you can delete, add or move the points on each points layer. There are keyboard shortcuts for easier use! 
+Additionally by double clicking on any point of the image you can examine the time-signal diagram of the selected point under the widget. Be sure to select the correct layer!  
 
+If you do not need any of the wells, then you can delete the layer and it won't be exported. If you either delete an image or peak points layer belonging to a well, the well will not be included in the export!  
 After selecting the needed cells and wells (and deleting the unnecessary ones) you can export plots and additional information about them.
 
 ## Exporting
