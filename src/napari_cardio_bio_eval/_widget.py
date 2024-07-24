@@ -22,6 +22,7 @@ class CardioBioEvalWidget(QWidget):
         self.viewer = viewer
         self._peaks = " peaks"
         self._bg_points = " background points"
+        self.docked_plot = None
         self.initUI()
 
     def initUI(self):
@@ -251,7 +252,6 @@ class CardioBioEvalWidget(QWidget):
 
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
-
     def load_and_preprocess_data_GUI(self):
         self.clear_layers()
         for name in WELL_NAMES:
@@ -260,10 +260,13 @@ class CardioBioEvalWidget(QWidget):
 
         self.peakButton.setEnabled(True)
         self.backgroundSelectorButton.setEnabled(True)
-    
 
     def manual_background_selection(self):
         self.preprocessing_params['drift_correction']['background_selector'] = True
+        
+        if self.docked_plot is not None:
+            self.viewer.window.remove_dock_widget(widget=self.docked_plot)
+            self.docked_plot = None
 
         self.clear_layers()
 
@@ -277,7 +280,6 @@ class CardioBioEvalWidget(QWidget):
 
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
-
 
     def peak_detection(self):
         self.localization_params = {
@@ -296,6 +298,7 @@ class CardioBioEvalWidget(QWidget):
         self.set_buttons_enabled(False)
         if self.preprocessing_params['drift_correction']['background_selector']:
             self.filter_ptss = self.get_filter_points()
+        self.preprocessing_params['drift_correction']['background_selector'] = False
 
         # Here the well data contains tha wells, the selected points and the filter points (which are the background points)
         self.well_data = localization(self.preprocessing_params, self.localization_params, 
@@ -317,13 +320,16 @@ class CardioBioEvalWidget(QWidget):
 
         current_line = self.get_cell_line_by_coords(self.remaining_wells[-1], 0, 0)
 
+        if self.docked_plot is not None:
+            self.viewer.window.remove_dock_widget(widget=self.docked_plot)
+            
         # create mpl figure with subplots
         mpl_fig = plt.figure()
         ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
         (line,) = ax.plot(self.time, current_line)
         # add the figure to the viewer as a FigureCanvas widget
-        docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig))
-        docked_plot.setMinimumSize(200, 300)
+        self.docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig), name='Cell signal plot')
+        self.docked_plot.setMinimumSize(200, 300)
 
         for layer in self.viewer.layers:
             @layer.mouse_double_click_callbacks.append
