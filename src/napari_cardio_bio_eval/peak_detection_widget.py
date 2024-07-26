@@ -16,7 +16,7 @@ from napari.qt.threading import thread_worker
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 
 
-class CardioBioEvalWidget(QWidget):
+class PeakDetectionWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
         self.viewer = viewer
