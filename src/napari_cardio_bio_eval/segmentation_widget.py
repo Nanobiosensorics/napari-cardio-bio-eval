@@ -2,6 +2,7 @@ import os
 import napari
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout, 
                             QPushButton, QLineEdit, QFileDialog, 
@@ -23,6 +24,7 @@ class SegmentationWidget(QWidget):
         self._peaks = " peaks"
         self._bg_points = " background points"
         self.docked_plot = None
+        self.initial_dir = os.path.expanduser("~") #???
         self.initUI()
 
     def initUI(self):
@@ -36,7 +38,7 @@ class SegmentationWidget(QWidget):
         self.browseBox = QHBoxLayout()
         self.dirLineEdit = QLineEdit(self)
         self.browseButton = QPushButton('Browse', self)
-        self.browseButton.clicked.connect(self.open_file_name_dialog)
+        self.browseButton.clicked.connect(self.select_data_dir_dialog)
         self.browseBox.addWidget(self.dirLineEdit)
         self.browseBox.addWidget(self.browseButton)
         self.layout.addRow(QLabel('Select Directory:'), self.browseBox)
@@ -101,38 +103,18 @@ class SegmentationWidget(QWidget):
         self.backgroundSelectorButton.setEnabled(False)
         self.layout.addRow(self.backgroundSelectorButton)
 
-        # Peak detection parameters
-        peakDetLabel = QLabel('Peak detection parameters:')
-        peakDetLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
-        self.layout.addRow(peakDetLabel)
+        # Segmentation
+        self.modelPath = QLineEdit(self)
+        self.browseModelLayout = QHBoxLayout()
+        self.browseModelButton = QPushButton('Browse', self)
+        self.browseModelButton.clicked.connect(self.select_model_dialog)
+        self.browseModelLayout.addWidget(self.modelPath)
+        self.browseModelLayout.addWidget(self.browseModelButton)
+        self.layout.addRow(QLabel('Select segmentation model:'), self.browseModelLayout)
 
-        self.thresholdBox = QHBoxLayout()
-        self.thresholdRangeMin = QSpinBox(self)
-        self.thresholdRangeMin.setMinimum(25)
-        self.thresholdRangeMin.setMaximum(5000)
-        self.thresholdRangeMin.setValue(75)
-        self.thresholdRangeMax = QSpinBox(self)
-        self.thresholdRangeMax.setMinimum(25)
-        self.thresholdRangeMax.setMaximum(5000)
-        self.thresholdRangeMax.setValue(3000)
-        self.thresholdBox.addWidget(self.thresholdRangeMin)
-        self.thresholdBox.addWidget(self.thresholdRangeMax)
-        self.layout.addRow(QLabel('Threshold range:'), self.thresholdBox)
-
-        self.neighbourhoodSize = QSpinBox(self)
-        self.neighbourhoodSize.setMinimum(1)
-        self.neighbourhoodSize.setMaximum(10)
-        self.neighbourhoodSize.setValue(3)
-        self.layout.addRow(QLabel('Neighbourhood size:'), self.neighbourhoodSize)
-
-        self.errorMaskFiltering = QCheckBox('Error Mask Filtering', self)
-        self.errorMaskFiltering.setChecked(True)
-        self.layout.addRow(self.errorMaskFiltering)
-        # Peak detection button
-        self.peakButton = QPushButton('Detect Signal Peaks', self)
-        self.peakButton.clicked.connect(self.peak_detection)
-        self.peakButton.setEnabled(False)
-        self.layout.addRow(self.peakButton)
+        self.segmentationButton = QPushButton('Segment', self)
+        self.segmentationButton.clicked.connect(self.segmentation)
+        self.layout.addRow(self.segmentationButton)
 
         # Export parameters
         dataLoadingLabel = QLabel('Exporting options:')
@@ -185,11 +167,15 @@ class SegmentationWidget(QWidget):
         self.progressBar.setMaximum(1)
         self.layout.addRow(self.progressBar)
 
-    def open_file_name_dialog(self):
-        options = QFileDialog.Options()
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory")
+    def select_data_dir_dialog(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Data Directory")
         if directory:
             self.dirLineEdit.setText(directory)
+
+    def select_model_dialog(self):
+        model_path, _ = QFileDialog.getOpenFileName(self, "Select segmentation model", filter="Model files (*.pth)")
+        if model_path:
+            self.modelPath.setText(model_path)
 
     def load_data(self):
         self.preprocessing_params = {
@@ -258,7 +244,6 @@ class SegmentationWidget(QWidget):
             visible = (name == WELL_NAMES[0])
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
 
-        self.peakButton.setEnabled(True)
         self.backgroundSelectorButton.setEnabled(True)
 
     def manual_background_selection(self):
@@ -278,51 +263,46 @@ class SegmentationWidget(QWidget):
                 self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
             else:
                 self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_points(self.invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
+            self.viewer.add_points(invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
 
         # Once the background selection is started new data cant be loaded
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
 
-    def peak_detection(self):
-        self.localization_params = {
-            'threshold_range' : [self.thresholdRangeMin.value(), self.thresholdRangeMax.value()],
-            'neighbourhood_size': self.neighbourhoodSize.value(),
-            'error_mask_filtering': self.errorMaskFiltering.isChecked()
-        }
+    def segmentation(self):
+        self.segmentationButton.setEnabled(False)
+        self.segmentationButton.setText("Segmenting...")
 
-        self.cell_selector = True
-        peak_detector = self.peak_detection_thread()
-        peak_detector.finished.connect(self.peak_detection_GUI) 
-        peak_detector.start()
+        self.model = torch.jit.load(self.modelPath.text())
+        
+        # if self.model.original_name == 'UNet':
+            # ha sru akkor a well data nagyítása kell
 
-    @thread_worker
-    def peak_detection_thread(self):
-        self.set_buttons_enabled(False)
-        if self.preprocessing_params['drift_correction']['background_selector']:
-            self.filter_ptss = self.get_filter_points()
-        self.preprocessing_params['drift_correction']['background_selector'] = False
+        data = []
+        # the indices length may vary later but for now it is 8
+        bio_len = 8
+        for name in WELL_NAMES:
+            data.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
 
-        # From here the well data contains the wells, the selected points and the filter points (which are the background points)
-        self.well_data = localization(self.preprocessing_params, self.localization_params, 
-                                    self.raw_wells, self.selected_range, 
-                                    self.filter_ptss)
+        processed_well_data = torch.tensor(np.array(data)).float() 
 
-        self.remaining_wells = self.get_remaining_wells_from_layers()
+        with torch.no_grad(): # ez kell?
+            output = self.model(processed_well_data)
 
-    def peak_detection_GUI(self):
+        output = output.squeeze().detach().numpy()
+        bin_output = (output > 0.5).astype(int)
+
+        print(bin_output.shape)
+
         self.clear_layers()
-        # visualize the data with peaks
-        for name in self.remaining_wells:
-            visible = (name == self.remaining_wells[0])
-            self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
-            # invert the coordinates of the peaks to plot in napari (later invert back for other plots)
-            self.viewer.add_points(self.invert_coords(self.well_data[name][1]), name=name + self._peaks, size=1, face_color='red', visible=visible)
-            # filter points for background selection
-            # self.viewer.add_points(self.invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
+        for i in range(len(WELL_NAMES)):
+            visible = (i == 0)
+            name = WELL_NAMES[i]
+            self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
+            self.viewer.add_labels(bin_output[i], name=name + " cell label", visible=visible)
+        
 
-        current_line = self.get_cell_line_by_coords(self.remaining_wells[-1], 0, 0)
-
+    def segmentation_GUI(self):
         if self.docked_plot is not None:
             self.viewer.window.remove_dock_widget(widget=self.docked_plot)
             
@@ -390,25 +370,21 @@ class SegmentationWidget(QWidget):
         self.viewer.layers.select_all()
         self.viewer.layers.remove_selected()
 
-    def invert_coords(self, coords):
-        return np.array([[y, x] for x, y in coords])
-
     def set_buttons_enabled(self, state):
         # state is a boolean
         self.backgroundSelectorButton.setEnabled(state)
-        self.peakButton.setEnabled(state)
         self.exportButton.setEnabled(state)
 
     def get_filter_points(self):
         filter_ptss = {}
         for name in WELL_NAMES:
-            filter_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._bg_points].data)).astype(np.uint8)
+            filter_ptss[name] = invert_coords(np.round(self.viewer.layers[name + self._bg_points].data)).astype(np.uint8)
         return filter_ptss
 
     def get_selected_cells(self):
         selected_ptss = {}
         for name in self.remaining_wells:
-            selected_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._peaks].data)).astype(np.uint8)
+            selected_ptss[name] = invert_coords(np.round(self.viewer.layers[name + self._peaks].data)).astype(np.uint8)
         return selected_ptss
 
     def get_remaining_wells_from_layers(self):
@@ -437,3 +413,10 @@ class SegmentationWidget(QWidget):
             self.rangeMin.setMaximum(frame_count)
             self.rangeMax.setMaximum(frame_count)
             self.rangeMax.setValue(frame_count)
+
+def invert_coords(coords):
+        return np.array([[y, x] for x, y in coords])
+
+def lin_indices(original_length, subsampled_length):
+    indices = np.linspace(0, original_length - 1, subsampled_length + 1, dtype=int)
+    return indices[1:]
