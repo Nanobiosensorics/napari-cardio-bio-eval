@@ -275,9 +275,12 @@ class SegmentationWidget(QWidget):
 
         self.model = torch.jit.load(self.modelPath.text())
         
-        # if self.model.original_name == 'UNet':
-            # ha sru akkor a well data nagyítása kell
+        if self.model.original_name == 'UNet':
+            self.segment_UNet()
+        if self.model.original_name == 'UNet8':
+            self.segment_UNet8()
 
+    def segment_UNet8(self):
         data = []
         # the indices length may vary later but for now it is 8
         bio_len = 8
@@ -286,7 +289,34 @@ class SegmentationWidget(QWidget):
 
         processed_well_data = torch.tensor(np.array(data)).float() 
 
-        with torch.no_grad(): # ez kell?
+        with torch.no_grad():
+            output = self.model(processed_well_data)
+
+        output = output.squeeze().detach().numpy()
+        bin_output = (output > 0.5).astype(int)
+
+        print(bin_output.shape)
+
+        self.clear_layers()
+        for i in range(len(WELL_NAMES)):
+            visible = (i == 0)
+            name = WELL_NAMES[i]            
+            well_tensor = torch.tensor(self.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
+            #                                                           size=(bin_output.shape[1], bin_output.shape[2])
+            upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(640, 640), mode='nearest').squeeze(0).squeeze(0).numpy()
+            self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
+            self.viewer.add_labels(bin_output[i], name=name + " cell label", visible=visible)
+
+    def segment_UNet(self):
+        data = []
+        # the indices length may vary later but for now it is 8
+        bio_len = 8
+        for name in WELL_NAMES:
+            data.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
+
+        processed_well_data = torch.tensor(np.array(data)).float() 
+
+        with torch.no_grad():
             output = self.model(processed_well_data)
 
         output = output.squeeze().detach().numpy()
