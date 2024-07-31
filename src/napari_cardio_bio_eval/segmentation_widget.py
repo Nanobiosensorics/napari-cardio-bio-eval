@@ -113,6 +113,7 @@ class SegmentationWidget(QWidget):
         self.layout.addRow(QLabel('Select segmentation model:'), self.browseModelLayout)
 
         self.segmentationButton = QPushButton('Segment', self)
+        self.segmentationButton.setEnabled(False)
         self.segmentationButton.clicked.connect(self.segmentation)
         self.layout.addRow(self.segmentationButton)
 
@@ -245,6 +246,7 @@ class SegmentationWidget(QWidget):
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
 
         self.backgroundSelectorButton.setEnabled(True)
+        self.segmentationButton.setEnabled(True)
 
     def manual_background_selection(self):
         self.preprocessing_params['drift_correction']['background_selector'] = True
@@ -274,68 +276,57 @@ class SegmentationWidget(QWidget):
         self.segmentationButton.setText("Segmenting...")
 
         self.model = torch.jit.load(self.modelPath.text())
-        
-        if self.model.original_name == 'UNet':
-            self.segment_UNet()
-        if self.model.original_name == 'UNet8':
-            self.segment_UNet8()
 
-    def segment_UNet8(self):
-        data = []
+        biosensor = []
         # the indices length may vary later but for now it is 8
         bio_len = 8
         for name in WELL_NAMES:
-            data.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
+            biosensor.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
 
-        processed_well_data = torch.tensor(np.array(data)).float() 
+        biosensor_tensor = torch.tensor(np.array(biosensor)).float() 
 
         with torch.no_grad():
-            output = self.model(processed_well_data)
+            output = self.model(biosensor_tensor)
 
-        output = output.squeeze().detach().numpy()
-        bin_output = (output > 0.5).astype(int)
+        self.image_size = output.shape[2]
+        self.scaling_factor = self.image_size // 80
 
-        print(bin_output.shape)
+        output = torch.sigmoid(output).squeeze().detach().numpy()
+        self.bin_output = (output > 0.5).astype(int)
 
+        print(self.scaling_factor, self.image_size)
+
+        if self.scaling_factor == 1:
+            self.GUI_UNet()
+        else: 
+            self.GUI_SRUNet()
+
+    def GUI_SRUNet(self):
         self.clear_layers()
         for i in range(len(WELL_NAMES)):
             visible = (i == 0)
             name = WELL_NAMES[i]            
             well_tensor = torch.tensor(self.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
-            #                                                           size=(bin_output.shape[1], bin_output.shape[2])
-            upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(640, 640), mode='nearest').squeeze(0).squeeze(0).numpy()
+            upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(self.image_size, self.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
             self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
-            self.viewer.add_labels(bin_output[i], name=name + " cell label", visible=visible)
+            self.viewer.add_labels(self.bin_output[i], name=name + " cell label", visible=visible)
+        self.GUI_plot()
 
-    def segment_UNet(self):
-        data = []
-        # the indices length may vary later but for now it is 8
-        bio_len = 8
-        for name in WELL_NAMES:
-            data.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
-
-        processed_well_data = torch.tensor(np.array(data)).float() 
-
-        with torch.no_grad():
-            output = self.model(processed_well_data)
-
-        output = output.squeeze().detach().numpy()
-        bin_output = (output > 0.5).astype(int)
-
-        print(bin_output.shape)
-
+    def GUI_UNet(self):
         self.clear_layers()
         for i in range(len(WELL_NAMES)):
             visible = (i == 0)
             name = WELL_NAMES[i]
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_labels(bin_output[i], name=name + " cell label", visible=visible)
-        
+            self.viewer.add_labels(self.bin_output[i], name=name + " cell label", visible=visible)
+        self.GUI_plot()
 
-    def segmentation_GUI(self):
+    def GUI_plot(self):
         if self.docked_plot is not None:
             self.viewer.window.remove_dock_widget(widget=self.docked_plot)
-            
+        
+        current_line = self.get_cell_line_by_coords(WELL_NAMES[-1], 0, 0)
+
         # create mpl figure with subplots
         mpl_fig = plt.figure()
         ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
@@ -352,9 +343,19 @@ class SegmentationWidget(QWidget):
                 try:
                     name = layer.name.split(' ')[0]
                     ax.clear()
-                    current_line = self.get_cell_line_by_coords(name, int(event.position[1]), int(event.position[2]))
+
+                    if self.scaling_factor == 1:
+                        x = int(event.position[1])
+                        y = int(event.position[2])
+                    else:
+                        x = int(event.position[0]/self.scaling_factor)
+                        y = int(event.position[1]/self.scaling_factor)
+
+                    x, y = clamp_coordinates(x, y)
+
+                    current_line = self.get_cell_line_by_coords(name, x, y)
                     (line,) = ax.plot(self.time, current_line)
-                    ax.set_title(f"Well: {name}, Cell: [{int(event.position[1])} {int(event.position[2])}]")
+                    ax.set_title(f"Well: {name}, Cell: [{x} {y}]")
                     line.figure.canvas.draw()
                 except IndexError:
                     pass
@@ -363,6 +364,8 @@ class SegmentationWidget(QWidget):
         self.set_buttons_enabled(True)
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
+        self.segmentationButton.setEnabled(True)
+        self.segmentationButton.setText("Segment")
 
     def export_data(self):
         self.export_params = {
@@ -426,7 +429,8 @@ class SegmentationWidget(QWidget):
         return remaining_wells
 
     def get_cell_line_by_coords(self, well_name, x, y):
-        current_line = self.well_data[well_name][0][:, x, y].copy()
+        # x and y must be between 0 and 80!
+        current_line = self.well_data[well_name][:, x, y].copy()
         if len(self.phases) > 0:
             for p in self.phases:
                 current_line[p] = np.nan
@@ -450,3 +454,8 @@ def invert_coords(coords):
 def lin_indices(original_length, subsampled_length):
     indices = np.linspace(0, original_length - 1, subsampled_length + 1, dtype=int)
     return indices[1:]
+
+def clamp_coordinates(x, y):
+    x = max(0, min(x, 79))
+    y = max(0, min(y, 79))
+    return x, y
