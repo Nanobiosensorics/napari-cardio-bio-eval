@@ -2,6 +2,7 @@ qtpy
 matplotlib
 opencv-python
 openpyxl
+torch
 
 tox
 pytest

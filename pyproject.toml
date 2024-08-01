@@ -28,6 +28,7 @@ dependencies = [
     "opencv-python",
     "openpyxl",
     "napari[pyqt5]",
+    "torch"
 ]
 
 [project.optional-dependencies]

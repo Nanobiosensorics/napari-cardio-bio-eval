@@ -280,7 +280,7 @@ class SegmentationWidget(QWidget):
         biosensor = []
         # the indices length may vary later but for now it is 8
         bio_len = 8
-        for name in WELL_NAMES:
+        for name in WELL_NAMES: # remaining_wells?
             biosensor.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
 
         biosensor_tensor = torch.tensor(np.array(biosensor)).float() 
@@ -294,7 +294,7 @@ class SegmentationWidget(QWidget):
         output = torch.sigmoid(output).squeeze().detach().numpy()
         self.bin_output = (output > 0.5).astype(int)
 
-        print(self.scaling_factor, self.image_size)
+        # print(self.scaling_factor, self.image_size)
 
         if self.scaling_factor == 1:
             self.GUI_UNet()
@@ -351,7 +351,8 @@ class SegmentationWidget(QWidget):
                         x = int(event.position[0]/self.scaling_factor)
                         y = int(event.position[1]/self.scaling_factor)
 
-                    x, y = clamp_coordinates(x, y)
+                    x = max(0, min(x, 79))
+                    y = max(0, min(y, 79))
 
                     current_line = self.get_cell_line_by_coords(name, x, y)
                     (line,) = ax.plot(self.time, current_line)
@@ -454,8 +455,3 @@ def invert_coords(coords):
 def lin_indices(original_length, subsampled_length):
     indices = np.linspace(0, original_length - 1, subsampled_length + 1, dtype=int)
     return indices[1:]
-
-def clamp_coordinates(x, y):
-    x = max(0, min(x, 79))
-    y = max(0, min(y, 79))
-    return x, y
