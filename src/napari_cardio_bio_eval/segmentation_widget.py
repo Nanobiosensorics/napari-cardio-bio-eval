@@ -21,10 +21,9 @@ class SegmentationWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
         self.viewer = viewer
-        self._peaks = " peaks"
+        self._segment = " segment"
         self._bg_points = " background points"
         self.docked_plot = None
-        self.initial_dir = os.path.expanduser("~") #???
         self.initUI()
 
     def initUI(self):
@@ -94,15 +93,6 @@ class SegmentationWidget(QWidget):
         self.processButton.clicked.connect(self.preprocess_data)
         self.layout.addRow(self.processButton)
 
-        # Manual Background selection
-        manBGsel = QLabel('Manual background selection if needed:')
-        manBGsel.setStyleSheet("QLabel { font-size: 10pt; font-weight: bold; }")
-        self.layout.addRow(manBGsel)
-        self.backgroundSelectorButton = QPushButton('Select Background Points Manually', self)
-        self.backgroundSelectorButton.clicked.connect(self.manual_background_selection)
-        self.backgroundSelectorButton.setEnabled(False)
-        self.layout.addRow(self.backgroundSelectorButton)
-
         # Segmentation
         self.modelPath = QLineEdit(self)
         self.browseModelLayout = QHBoxLayout()
@@ -117,48 +107,11 @@ class SegmentationWidget(QWidget):
         self.segmentationButton.clicked.connect(self.segmentation)
         self.layout.addRow(self.segmentationButton)
 
-        # Export parameters
-        dataLoadingLabel = QLabel('Exporting options:')
-        dataLoadingLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
-        self.layout.addRow(dataLoadingLabel)
-
-        self.coordinates = QCheckBox('Coordinates', self)
-        self.coordinates.setChecked(True)
-        self.layout.addRow(self.coordinates)
-
-        self.preprocessedSignals = QCheckBox('Preprocessed Signals', self)
-        self.preprocessedSignals.setChecked(True)
-        self.layout.addRow(self.preprocessedSignals)
-
-        self.rawSignals = QCheckBox('Raw Signals', self)
-        self.rawSignals.setChecked(True)
-        self.layout.addRow(self.rawSignals)
-
-        self.averageSignal = QCheckBox('Average Signal', self)
-        self.layout.addRow(self.averageSignal)
-        self.breakdownSignal = QCheckBox('Breakdown Signal', self)
-        self.layout.addRow(self.breakdownSignal)
-
-        self.maxWell = QCheckBox('Max Well', self)
-        self.maxWell.setChecked(True)
-        self.layout.addRow(self.maxWell)
-
-        self.plotSignalsWithWell = QCheckBox('Plot Signals with Well', self)
-        self.plotSignalsWithWell.setChecked(True)
-        self.layout.addRow(self.plotSignalsWithWell)
-
-        self.plotWellWithCoordinates = QCheckBox('Plot Well with Coordinates', self)
-        self.plotWellWithCoordinates.setChecked(True)
-        self.layout.addRow(self.plotWellWithCoordinates)
-
-        self.plotCellsIndividually = QCheckBox('Plot Cells Individually', self)
-        self.layout.addRow(self.plotCellsIndividually)
-        self.signalPartsByPhases = QCheckBox('Signal Parts by Phases', self)
-        self.layout.addRow(self.signalPartsByPhases)
-        self.maxCenteredSignals = QCheckBox('Max Centered Signals', self)
-        self.layout.addRow(self.maxCenteredSignals)
+        exportLabel = QLabel('Export:')
+        exportLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
+        self.layout.addRow(exportLabel)
         # Export button
-        self.exportButton = QPushButton('Export Data', self)
+        self.exportButton = QPushButton('Export segments', self)
         self.exportButton.clicked.connect(self.export_data)
         self.exportButton.setEnabled(False)
         self.layout.addRow(self.exportButton)
@@ -248,29 +201,6 @@ class SegmentationWidget(QWidget):
         self.backgroundSelectorButton.setEnabled(True)
         self.segmentationButton.setEnabled(True)
 
-    def manual_background_selection(self):
-        self.preprocessing_params['drift_correction']['background_selector'] = True
-        
-        if self.docked_plot is not None:
-            self.viewer.window.remove_dock_widget(widget=self.docked_plot)
-            self.docked_plot = None
-
-        self.clear_layers()
-
-        for name in WELL_NAMES:
-            visible = (name == WELL_NAMES[0])
-            # if the peak detection happened once the well_data contains more data: the wells, the selected points and the filter points
-            # so we need to select the first element of the tuple
-            if self.cell_selector:
-                self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
-            else:
-                self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_points(invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
-
-        # Once the background selection is started new data cant be loaded
-        self.loadButton.setEnabled(False)
-        self.processButton.setEnabled(False)
-
     def segmentation(self):
         self.segmentationButton.setEnabled(False)
         self.segmentationButton.setText("Segmenting...")
@@ -309,7 +239,7 @@ class SegmentationWidget(QWidget):
             well_tensor = torch.tensor(self.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
             upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(self.image_size, self.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
             self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
-            self.viewer.add_labels(self.bin_output[i], name=name + " cell label", visible=visible)
+            self.viewer.add_labels(self.bin_output[i], name=name + self._segment, visible=visible)
         self.GUI_plot()
 
     def GUI_UNet(self):
@@ -318,7 +248,7 @@ class SegmentationWidget(QWidget):
             visible = (i == 0)
             name = WELL_NAMES[i]
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_labels(self.bin_output[i], name=name + " cell label", visible=visible)
+            self.viewer.add_labels(self.bin_output[i], name=name + self._segment, visible=visible)
         self.GUI_plot()
 
     def GUI_plot(self):
@@ -369,36 +299,25 @@ class SegmentationWidget(QWidget):
         self.segmentationButton.setText("Segment")
 
     def export_data(self):
-        self.export_params = {
-            'coordinates': self.coordinates.isChecked(),
-            'preprocessed_signals': self.preprocessedSignals.isChecked(),
-            'raw_signals': self.rawSignals.isChecked(),
-            'average_signal': self.averageSignal.isChecked(),
-            'breakdown_signal': self.breakdownSignal.isChecked(),
-            'max_well': self.maxWell.isChecked(),
-            'plot_signals_with_well': self.plotSignalsWithWell.isChecked(),
-            'plot_well_with_coordinates': self.plotWellWithCoordinates.isChecked(),
-            'plot_cells_individually': self.plotCellsIndividually.isChecked(),
-            'signal_parts_by_phases': self.signalPartsByPhases.isChecked(),
-            'max_centered_signals': self.maxCenteredSignals.isChecked()
-        }
         self.progressBar.setMaximum(0)
         self.remaining_wells = self.get_remaining_wells_from_layers()
-        self.selected_ptss = self.get_selected_cells()
 
+        segments = {}
         for name in self.remaining_wells:
-            self.well_data[name] = (self.viewer.layers[name].data, self.selected_ptss[name], self.well_data[name][-1])
+            segments[name] = self.viewer.layers[name + self._segment].data
 
-        save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
+        # Save to disk
+        with open('well_segments.npz', 'wb') as f:
+            np.savez(self.RESULT_PATH, **segments)
 
-        exporter = self.export_res()
-        exporter.finished.connect(lambda: self.progressBar.setMaximum(1))
-        exporter.start()
+        # # Later on, load from disk
+        # loaded = np.load('well_segments.npz')
 
-    @thread_worker
-    def export_res(self):
-        export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss,
-                        self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
+        # # Access data
+        # for i in range(1, len(segments)+1):
+        #     loaded_segments = loaded['well'+str(i)]
+
+        self.progressBar.setMaximum(1)
 
     def clear_layers(self):
         self.viewer.layers.select_all()
@@ -422,7 +341,7 @@ class SegmentationWidget(QWidget):
         return selected_ptss
 
     def get_remaining_wells_from_layers(self):
-        peak_layers = [layer.name for layer in self.viewer.layers if 'peaks' in layer.name]
+        peak_layers = [layer.name for layer in self.viewer.layers if 'segment' in layer.name]
         remaining_wells = [layer.name for layer in self.viewer.layers if len(layer.name.split()) == 1]
         if len(peak_layers) == 0:
             return remaining_wells
