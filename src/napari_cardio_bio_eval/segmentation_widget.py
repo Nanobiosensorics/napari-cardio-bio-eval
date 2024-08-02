@@ -3,6 +3,7 @@ import napari
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import cv2
 
 from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout, 
                             QPushButton, QLineEdit, QFileDialog, 
@@ -102,6 +103,9 @@ class SegmentationWidget(QWidget):
         self.browseModelLayout.addWidget(self.browseModelButton)
         self.layout.addRow(QLabel('Select segmentation model:'), self.browseModelLayout)
 
+        self.showCellCenters = QCheckBox('Show cell centers', self)
+        self.layout.addRow(self.showCellCenters)
+
         self.segmentationButton = QPushButton('Segment', self)
         self.segmentationButton.setEnabled(False)
         self.segmentationButton.clicked.connect(self.segmentation)
@@ -151,7 +155,7 @@ class SegmentationWidget(QWidget):
 
     @thread_worker
     def load_data_thread(self):
-        self.set_buttons_enabled(False)
+        self.exportButton.setEnabled(False)
         path = self.dirLineEdit.text()
         self.RESULT_PATH = os.path.join(path, 'result')
         if not os.path.exists(self.RESULT_PATH):
@@ -185,7 +189,7 @@ class SegmentationWidget(QWidget):
             self.preprocessing_params['signal_range']['range_type'] = RangeType.INDIVIDUAL_POINT
 
         # It means that the range is set to the last phase or time point, it would be out of index
-        if self.rangeMax.value() == len(self.full_phases)+1:
+        if self.rangeMax.value() == len(self.full_phases) + 1:
             self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), None]
         else:
             self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), self.rangeMax.value()]
@@ -198,7 +202,6 @@ class SegmentationWidget(QWidget):
             visible = (name == WELL_NAMES[0])
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
 
-        self.backgroundSelectorButton.setEnabled(True)
         self.segmentationButton.setEnabled(True)
 
     def segmentation(self):
@@ -223,6 +226,8 @@ class SegmentationWidget(QWidget):
 
         output = torch.sigmoid(output).squeeze().detach().numpy()
         self.bin_output = (output > 0.5).astype(int)
+        if self.showCellCenters.isChecked():
+            self.cell_centers = get_cell_centers(self.bin_output)
 
         # print(self.scaling_factor, self.image_size)
 
@@ -240,6 +245,8 @@ class SegmentationWidget(QWidget):
             upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(self.image_size, self.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
             self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
             self.viewer.add_labels(self.bin_output[i], name=name + self._segment, visible=visible)
+            if self.showCellCenters.isChecked():
+                self.viewer.add_points(invert_coords(self.cell_centers[i]), name=name + ' cell centers', size=self.scaling_factor/2, face_color='red', visible=visible)
         self.GUI_plot()
 
     def GUI_UNet(self):
@@ -249,6 +256,8 @@ class SegmentationWidget(QWidget):
             name = WELL_NAMES[i]
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
             self.viewer.add_labels(self.bin_output[i], name=name + self._segment, visible=visible)
+            if self.showCellCenters.isChecked():
+                self.viewer.add_points(invert_coords(self.cell_centers[i]), name=name + ' cell centers', size=1, face_color='red', visible=visible)
         self.GUI_plot()
 
     def GUI_plot(self):
@@ -292,7 +301,7 @@ class SegmentationWidget(QWidget):
                     pass
         
         # Once the peak detection is started new data cant be loaded
-        self.set_buttons_enabled(True)
+        self.exportButton.setEnabled(True)
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
         self.segmentationButton.setEnabled(True)
@@ -306,46 +315,27 @@ class SegmentationWidget(QWidget):
         for name in self.remaining_wells:
             segments[name] = self.viewer.layers[name + self._segment].data
 
-        # Save to disk
-        with open('well_segments.npz', 'wb') as f:
-            np.savez(self.RESULT_PATH, **segments)
+        # segments['size'] = self.image_size
+
+        np.savez(os.path.join(self.RESULT_PATH, 'well_segments'), **segments)
 
         # # Later on, load from disk
-        # loaded = np.load('well_segments.npz')
-
-        # # Access data
-        # for i in range(1, len(segments)+1):
-        #     loaded_segments = loaded['well'+str(i)]
-
+        # segments = np.load('well_segments.npz')
+        # for key in segments.files:
+        #     print(key, segments[key].shape)
+        
         self.progressBar.setMaximum(1)
 
     def clear_layers(self):
         self.viewer.layers.select_all()
         self.viewer.layers.remove_selected()
 
-    def set_buttons_enabled(self, state):
-        # state is a boolean
-        self.backgroundSelectorButton.setEnabled(state)
-        self.exportButton.setEnabled(state)
-
-    def get_filter_points(self):
-        filter_ptss = {}
-        for name in WELL_NAMES:
-            filter_ptss[name] = invert_coords(np.round(self.viewer.layers[name + self._bg_points].data)).astype(np.uint8)
-        return filter_ptss
-
-    def get_selected_cells(self):
-        selected_ptss = {}
-        for name in self.remaining_wells:
-            selected_ptss[name] = invert_coords(np.round(self.viewer.layers[name + self._peaks].data)).astype(np.uint8)
-        return selected_ptss
-
     def get_remaining_wells_from_layers(self):
         peak_layers = [layer.name for layer in self.viewer.layers if 'segment' in layer.name]
         remaining_wells = [layer.name for layer in self.viewer.layers if len(layer.name.split()) == 1]
         if len(peak_layers) == 0:
             return remaining_wells
-        remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + self._peaks) for peak in peak_layers)]
+        remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + self._segment) for peak in peak_layers)]
         return remaining_wells
 
     def get_cell_line_by_coords(self, well_name, x, y):
@@ -367,6 +357,14 @@ class SegmentationWidget(QWidget):
             self.rangeMin.setMaximum(frame_count)
             self.rangeMax.setMaximum(frame_count)
             self.rangeMax.setValue(frame_count)
+
+def get_cell_centers(output):
+    cell_centers = []
+    for i in range(len(WELL_NAMES)):
+        pred = output[i].squeeze().astype(np.uint8)
+        _, _, _, centers = cv2.connectedComponentsWithStats(pred, connectivity=8)
+        cell_centers.append(centers)
+    return cell_centers[1:]
 
 def invert_coords(coords):
         return np.array([[y, x] for x, y in coords])
