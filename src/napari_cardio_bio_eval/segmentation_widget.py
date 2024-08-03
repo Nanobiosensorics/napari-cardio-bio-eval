@@ -197,7 +197,7 @@ class SegmentationWidget(QWidget):
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
     def load_and_preprocess_data_GUI(self):
-        self.clear_layers()
+        clear_layers()
         for name in WELL_NAMES:
             visible = (name == WELL_NAMES[0])
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
@@ -237,7 +237,7 @@ class SegmentationWidget(QWidget):
             self.GUI_SRUNet()
 
     def GUI_SRUNet(self):
-        self.clear_layers()
+        clear_layers()
         for i in range(len(WELL_NAMES)):
             visible = (i == 0)
             name = WELL_NAMES[i]            
@@ -250,7 +250,7 @@ class SegmentationWidget(QWidget):
         self.GUI_plot()
 
     def GUI_UNet(self):
-        self.clear_layers()
+        clear_layers()
         for i in range(len(WELL_NAMES)):
             visible = (i == 0)
             name = WELL_NAMES[i]
@@ -264,7 +264,7 @@ class SegmentationWidget(QWidget):
         if self.docked_plot is not None:
             self.viewer.window.remove_dock_widget(widget=self.docked_plot)
         
-        current_line = self.get_cell_line_by_coords(WELL_NAMES[-1], 0, 0)
+        current_line = get_cell_line_by_coords(self.well_data, WELL_NAMES[-1], 0, 0, self.phases)
 
         # create mpl figure with subplots
         mpl_fig = plt.figure()
@@ -293,7 +293,7 @@ class SegmentationWidget(QWidget):
                     x = max(0, min(x, 79))
                     y = max(0, min(y, 79))
 
-                    current_line = self.get_cell_line_by_coords(name, x, y)
+                    current_line = get_cell_line_by_coords(self.well_data, name, x, y, self.phases)
                     (line,) = ax.plot(self.time, current_line)
                     ax.set_title(f"Well: {name}, Cell: [{x} {y}]")
                     line.figure.canvas.draw()
@@ -309,13 +309,13 @@ class SegmentationWidget(QWidget):
 
     def export_data(self):
         self.progressBar.setMaximum(0)
-        self.remaining_wells = self.get_remaining_wells_from_layers()
+        self.remaining_wells = get_remaining_wells_from_layers()
 
         segments = {}
         for name in self.remaining_wells:
             segments[name] = self.viewer.layers[name + self._segment].data
 
-        # segments['size'] = self.image_size
+        # segments['size'] = self.image_size # kell? mert shapeből úgy is kiolvasható
 
         np.savez(os.path.join(self.RESULT_PATH, 'well_segments'), **segments)
 
@@ -325,26 +325,6 @@ class SegmentationWidget(QWidget):
         #     print(key, segments[key].shape)
         
         self.progressBar.setMaximum(1)
-
-    def clear_layers(self):
-        self.viewer.layers.select_all()
-        self.viewer.layers.remove_selected()
-
-    def get_remaining_wells_from_layers(self):
-        peak_layers = [layer.name for layer in self.viewer.layers if 'segment' in layer.name]
-        remaining_wells = [layer.name for layer in self.viewer.layers if len(layer.name.split()) == 1]
-        if len(peak_layers) == 0:
-            return remaining_wells
-        remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + self._segment) for peak in peak_layers)]
-        return remaining_wells
-
-    def get_cell_line_by_coords(self, well_name, x, y):
-        # x and y must be between 0 and 80!
-        current_line = self.well_data[well_name][:, x, y].copy()
-        if len(self.phases) > 0:
-            for p in self.phases:
-                current_line[p] = np.nan
-        return current_line
 
     def range_type_changed(self):
         if self.rangeTypeSelect.currentIndex() == 0:
@@ -357,6 +337,34 @@ class SegmentationWidget(QWidget):
             self.rangeMin.setMaximum(frame_count)
             self.rangeMax.setMaximum(frame_count)
             self.rangeMax.setValue(frame_count)
+
+def clear_layers(viewer):
+    viewer.layers.select_all()
+    viewer.layers.remove_selected()
+
+def get_remaining_wells_from_layers(viewer):
+    remaining_wells = []
+    for layer in viewer.layers:
+        well_name = layer.name.split()[0]
+        if well_name not in remaining_wells:
+            remaining_wells.append(well_name)
+    return remaining_wells
+
+    # érdemes túlbonyolítani?
+    # other_layers = [layer.name for layer in viewer.layers if 'segment' in layer.name]
+    # remaining_wells = [layer.name for layer in viewer.layers if len(layer.name.split()) == 1]
+    # if len(other_layers) == 0:
+    #     return remaining_wells
+    # remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + self._segment) for peak in other_layers)]
+    # return remaining_wells
+
+def get_cell_line_by_coords(well_data, well_name, x, y, phases):
+        # x and y must be between 0 and 80!
+        current_line = well_data[well_name][:, x, y].copy()
+        if len(phases) > 0:
+            for p in phases:
+                current_line[p] = np.nan
+        return current_line
 
 def get_cell_centers(output):
     cell_centers = []
