@@ -313,7 +313,10 @@ class SegmentationWidget(QWidget):
 
         segments = {}
         for name in self.remaining_wells:
-            segments[name] = self.viewer.layers[name + self._segment].data
+            if self.showCellCenters.isChecked():
+                segments[name] = (self.viewer.layers[name + self._segment].data, self.viewer.layers[name + ' cell centers'].data)
+            else:
+                segments[name] = self.viewer.layers[name + self._segment].data
 
         # segments['size'] = self.image_size # kell? mert shapeből úgy is kiolvasható
 
@@ -372,8 +375,8 @@ def get_cell_centers(output):
     for i in range(len(WELL_NAMES)):
         pred = output[i].squeeze().astype(np.uint8)
         _, _, _, centers = cv2.connectedComponentsWithStats(pred, connectivity=8)
-        cell_centers.append(centers)
-    return cell_centers[1:]
+        cell_centers.append(centers[1:])
+    return cell_centers
 
 def invert_coords(coords):
         return np.array([[y, x] for x, y in coords])
