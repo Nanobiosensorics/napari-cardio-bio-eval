@@ -197,7 +197,7 @@ class SegmentationWidget(QWidget):
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
     def load_and_preprocess_data_GUI(self):
-        clear_layers()
+        clear_layers(self.viewer)
         for name in WELL_NAMES:
             visible = (name == WELL_NAMES[0])
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
@@ -237,7 +237,7 @@ class SegmentationWidget(QWidget):
             self.GUI_SRUNet()
 
     def GUI_SRUNet(self):
-        clear_layers()
+        clear_layers(self.viewer)
         for i in range(len(WELL_NAMES)):
             visible = (i == 0)
             name = WELL_NAMES[i]            
@@ -250,7 +250,7 @@ class SegmentationWidget(QWidget):
         self.GUI_plot()
 
     def GUI_UNet(self):
-        clear_layers()
+        clear_layers(self.viewer)
         for i in range(len(WELL_NAMES)):
             visible = (i == 0)
             name = WELL_NAMES[i]
@@ -309,7 +309,7 @@ class SegmentationWidget(QWidget):
 
     def export_data(self):
         self.progressBar.setMaximum(0)
-        self.remaining_wells = get_remaining_wells_from_layers()
+        self.remaining_wells = get_remaining_wells_from_layers(self.viewer)
 
         segments = {}
         for name in self.remaining_wells:
@@ -321,6 +321,7 @@ class SegmentationWidget(QWidget):
 
         # # Later on, load from disk
         # segments = np.load('well_segments.npz')
+        # well_segments = {key: segments[key] for key in segments.files}
         # for key in segments.files:
         #     print(key, segments[key].shape)
         

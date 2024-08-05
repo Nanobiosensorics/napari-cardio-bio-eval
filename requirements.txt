@@ -1,8 +1,9 @@
 qtpy
 matplotlib
-opencv-python
+opencv-python-headless
 openpyxl
 torch
+numpy==1.26
 
 tox
 pytest
