@@ -2,7 +2,6 @@ qtpy
 matplotlib
 opencv-python-headless
 openpyxl
-torch
 numpy==1.26
 
 tox
