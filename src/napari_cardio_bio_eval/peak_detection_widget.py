@@ -23,6 +23,8 @@ class PeakDetectionWidget(QWidget):
         self._peaks = " peaks"
         self._bg_points = " background points"
         self.docked_plot = None
+        self.background_selector = False
+        self.full_phases = []
         self.initUI()
 
     def initUI(self):
@@ -185,6 +187,18 @@ class PeakDetectionWidget(QWidget):
         self.progressBar.setMaximum(1)
         self.layout.addRow(self.progressBar)
 
+    def range_type_changed(self):
+        if self.rangeTypeSelect.currentIndex() == 0:
+            num_of_phases = len(self.full_phases)
+            self.rangeMin.setMaximum(num_of_phases)
+            self.rangeMax.setMaximum(num_of_phases + 1)
+            self.rangeMax.setValue(num_of_phases + 1)
+        else:
+            frame_count = len(self.full_time)
+            self.rangeMin.setMaximum(frame_count)
+            self.rangeMax.setMaximum(frame_count)
+            self.rangeMax.setValue(frame_count)
+
     def open_file_name_dialog(self):
         options = QFileDialog.Options()
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
@@ -192,18 +206,7 @@ class PeakDetectionWidget(QWidget):
             self.dirLineEdit.setText(directory)
 
     def load_data(self):
-        self.preprocessing_params = {
-            'flip': [self.horizontalFlip.isChecked(), self.verticalFlip.isChecked()],
-            'signal_range' : {
-            'range_type': RangeType.MEASUREMENT_PHASE,
-            'ranges': [0, None], 
-            },
-            'drift_correction': {
-            'threshold': self.threshold.value(),
-            'filter_method': self.filterMethod.currentText(),
-            'background_selector': False,
-            }
-        }
+        self.preprocessing_params = update_preprocessing_params(self)
 
         self.cell_selector = False
         loader = self.load_data_thread()
@@ -211,24 +214,52 @@ class PeakDetectionWidget(QWidget):
 
     @thread_worker
     def load_data_thread(self):
-        self.set_buttons_enabled(False)
+        set_buttons_enabled(self, False)
         path = self.dirLineEdit.text()
         self.RESULT_PATH = os.path.join(path, 'result')
         if not os.path.exists(self.RESULT_PATH):
             os.mkdir(self.RESULT_PATH)
 
         self.raw_wells, self.full_time, self.full_phases = load_data(path, flip=self.preprocessing_params['flip'])
-        self.filter_params, _, _ = load_params(self.RESULT_PATH)
+        self.filter_params, self.preprocessing_params_loaded, self.localization_params_loaded = load_params(self.RESULT_PATH)
+
+        # we load in the parameters from the previous run if they exist
+        # and set the values in the GUI so it is clear what was used and can be changed
+        if self.preprocessing_params_loaded:
+            self.preprocessing_params = self.preprocessing_params_loaded
+            self.horizontalFlip.setChecked(self.preprocessing_params['flip'][0])
+            self.verticalFlip.setChecked(self.preprocessing_params['flip'][1])
+            self.rangeTypeSelect.setCurrentIndex(self.preprocessing_params['signal_range']['range_type'])
+            self.rangeMin.setValue(self.preprocessing_params['signal_range']['ranges'][0])
+            if self.preprocessing_params['signal_range']['ranges'][1] is None:
+                self.rangeMax.setValue(len(self.full_phases)+1)
+            else:
+                self.rangeMax.setValue(self.preprocessing_params['signal_range']['ranges'][1])
+            self.threshold.setValue(self.preprocessing_params['drift_correction']['threshold'])
+            self.filterMethod.setCurrentText(self.preprocessing_params['drift_correction']['filter_method'])
+
+        if self.localization_params_loaded:
+            self.localization_params = self.localization_params_loaded
+            self.thresholdRangeMin.setValue(self.localization_params['threshold_range'][0])
+            self.thresholdRangeMax.setValue(self.localization_params['threshold_range'][1])
+            self.neighbourhoodSize.setValue(self.localization_params['neighbourhood_size'])
+            self.errorMaskFiltering.setChecked(self.localization_params['error_mask_filtering'])
 
         self.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(self.full_phases)]}, Time: {len(self.full_time)}')
         self.rangeTypeSelect.currentIndexChanged.connect(self.range_type_changed)
+
         # Enable the range selection
         self.rangeTypeSelect.setEnabled(True)
         self.rangeMin.setEnabled(True)
         self.rangeMax.setEnabled(True)
-        self.rangeMin.setMaximum(len(self.full_time))
-        self.rangeMax.setMaximum(len(self.full_time))
-        self.rangeMax.setValue(len(self.full_time))
+        if self.rangeTypeSelect.currentIndex() == 0:
+            self.rangeMin.setMaximum(len(self.full_phases))
+            self.rangeMax.setMaximum(len(self.full_phases)+1)
+            self.rangeMax.setValue(len(self.full_phases)+1)
+        else:
+            self.rangeMin.setMaximum(len(self.full_time))
+            self.rangeMax.setMaximum(len(self.full_time))
+            self.rangeMax.setValue(len(self.full_time))
 
         self.processButton.setEnabled(True)
 
@@ -239,21 +270,15 @@ class PeakDetectionWidget(QWidget):
 
     @thread_worker
     def preprocess_data_thread(self):
-        if self.rangeTypeSelect.currentIndex() == 0:
-            self.preprocessing_params['signal_range']['range_type'] = RangeType.MEASUREMENT_PHASE
-        else:
-            self.preprocessing_params['signal_range']['range_type'] = RangeType.INDIVIDUAL_POINT
-
+        self.preprocessing_params = update_preprocessing_params(self)
         # It means that the range is set to the last phase or time point, it would be out of index
-        if self.rangeMax.value() == len(self.full_phases)+1:
-            self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), None]
-        else:
-            self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), self.rangeMax.value()]
+        # if self.rangeMax.value() == len(self.full_phases)+1:
+        #     self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), None]
 
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
     def load_and_preprocess_data_GUI(self):
-        self.clear_layers()
+        clear_layers(self.viewer)
         for name in WELL_NAMES:
             visible = (name == WELL_NAMES[0])
             self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
@@ -262,13 +287,13 @@ class PeakDetectionWidget(QWidget):
         self.backgroundSelectorButton.setEnabled(True)
 
     def manual_background_selection(self):
-        self.preprocessing_params['drift_correction']['background_selector'] = True
+        self.background_selector = True
         
         if self.docked_plot is not None:
             self.viewer.window.remove_dock_widget(widget=self.docked_plot)
             self.docked_plot = None
 
-        self.clear_layers()
+        clear_layers(self.viewer)
 
         for name in WELL_NAMES:
             visible = (name == WELL_NAMES[0])
@@ -278,18 +303,14 @@ class PeakDetectionWidget(QWidget):
                 self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
             else:
                 self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_points(self.invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
+            self.viewer.add_points(invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
 
         # Once the background selection is started new data cant be loaded
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
 
     def peak_detection(self):
-        self.localization_params = {
-            'threshold_range' : [self.thresholdRangeMin.value(), self.thresholdRangeMax.value()],
-            'neighbourhood_size': self.neighbourhoodSize.value(),
-            'error_mask_filtering': self.errorMaskFiltering.isChecked()
-        }
+        self.localization_params = update_localization_params(self)
 
         self.cell_selector = True
         peak_detector = self.peak_detection_thread()
@@ -298,30 +319,33 @@ class PeakDetectionWidget(QWidget):
 
     @thread_worker
     def peak_detection_thread(self):
-        self.set_buttons_enabled(False)
-        if self.preprocessing_params['drift_correction']['background_selector']:
-            self.filter_ptss = self.get_filter_points()
-        self.preprocessing_params['drift_correction']['background_selector'] = False
+        set_buttons_enabled(self, False)
+        if self.background_selector:
+            self.filter_ptss = get_filter_points(self.viewer, self._bg_points)
+
+        self.preprocessing_params = update_preprocessing_params(self)
+        self.localization_params = update_localization_params(self)
+
+        self.background_selector = False
 
         # From here the well data contains the wells, the selected points and the filter points (which are the background points)
-        self.well_data = localization(self.preprocessing_params, self.localization_params, 
-                                    self.raw_wells, self.selected_range, 
-                                    self.filter_ptss)
+        self.well_data = localization(self.preprocessing_params, self.localization_params,
+                                      self.raw_wells, self.selected_range, self.filter_ptss)
 
-        self.remaining_wells = self.get_remaining_wells_from_layers()
+        self.remaining_wells = get_remaining_wells_from_layers(self.viewer)
 
     def peak_detection_GUI(self):
-        self.clear_layers()
+        clear_layers(self.viewer)
         # visualize the data with peaks
         for name in self.remaining_wells:
             visible = (name == self.remaining_wells[0])
             self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
             # invert the coordinates of the peaks to plot in napari (later invert back for other plots)
-            self.viewer.add_points(self.invert_coords(self.well_data[name][1]), name=name + self._peaks, size=1, face_color='red', visible=visible)
+            self.viewer.add_points(invert_coords(self.well_data[name][1]), name=name + self._peaks, size=1, face_color='red', visible=visible)
             # filter points for background selection
-            # self.viewer.add_points(self.invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
+            # self.viewer.add_points(invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
 
-        current_line = self.get_cell_line_by_coords(self.remaining_wells[-1], 0, 0)
+        current_line = get_cell_line_by_coords(self.well_data[self.remaining_wells[-1]][0], 0, 0, self.phases)
 
         if self.docked_plot is not None:
             self.viewer.window.remove_dock_widget(widget=self.docked_plot)
@@ -342,7 +366,7 @@ class PeakDetectionWidget(QWidget):
                 try:
                     name = layer.name.split(' ')[0]
                     ax.clear()
-                    current_line = self.get_cell_line_by_coords(name, int(event.position[1]), int(event.position[2]))
+                    current_line = get_cell_line_by_coords(self.well_data[name][0], int(event.position[1]), int(event.position[2]), self.phases)
                     (line,) = ax.plot(self.time, current_line)
                     ax.set_title(f"Well: {name}, Cell: [{int(event.position[1])} {int(event.position[2])}]")
                     line.figure.canvas.draw()
@@ -350,90 +374,113 @@ class PeakDetectionWidget(QWidget):
                     pass
         
         # Once the peak detection is started new data cant be loaded
-        self.set_buttons_enabled(True)
+        set_buttons_enabled(self, True)
         self.loadButton.setEnabled(False)
         self.processButton.setEnabled(False)
 
     def export_data(self):
-        self.export_params = {
-            'coordinates': self.coordinates.isChecked(),
-            'preprocessed_signals': self.preprocessedSignals.isChecked(),
-            'raw_signals': self.rawSignals.isChecked(),
-            'average_signal': self.averageSignal.isChecked(),
-            'breakdown_signal': self.breakdownSignal.isChecked(),
-            'max_well': self.maxWell.isChecked(),
-            'plot_signals_with_well': self.plotSignalsWithWell.isChecked(),
-            'plot_well_with_coordinates': self.plotWellWithCoordinates.isChecked(),
-            'plot_cells_individually': self.plotCellsIndividually.isChecked(),
-            'signal_parts_by_phases': self.signalPartsByPhases.isChecked(),
-            'max_centered_signals': self.maxCenteredSignals.isChecked()
-        }
+        self.export_params = update_export_params(self)
         self.progressBar.setMaximum(0)
-        self.remaining_wells = self.get_remaining_wells_from_layers()
-        self.selected_ptss = self.get_selected_cells()
+        self.remaining_wells = get_remaining_wells_from_layers(self.viewer)
+        self.selected_ptss = get_selected_cells(self.viewer, self.remaining_wells, self._peaks)
 
         for name in self.remaining_wells:
             self.well_data[name] = (self.viewer.layers[name].data, self.selected_ptss[name], self.well_data[name][-1])
 
+        self.preprocessing_params = update_preprocessing_params(self)
+        self.localization_params = update_localization_params(self)
+
         save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
 
-        exporter = self.export_res()
+        exporter = export_res(self)
         exporter.finished.connect(lambda: self.progressBar.setMaximum(1))
         exporter.start()
 
-    @thread_worker
-    def export_res(self):
-        export_results(self.export_params, self.RESULT_PATH, self.selected_ptss, self.filter_ptss,
-                        self.well_data, self.time, self.phases, self.raw_wells, self.full_time, self.full_phases, self.selected_range)
+@thread_worker
+def export_res(widget):
+    export_results(widget.export_params, widget.RESULT_PATH, widget.selected_ptss, widget.filter_ptss, widget.well_data, 
+                   widget.time, widget.phases, widget.raw_wells, widget.full_time, widget.full_phases, widget.selected_range)
 
-    def clear_layers(self):
-        self.viewer.layers.select_all()
-        self.viewer.layers.remove_selected()
+def clear_layers(viewer):
+    viewer.layers.select_all()
+    viewer.layers.remove_selected()
 
-    def invert_coords(self, coords):
-        return np.array([[y, x] for x, y in coords])
+def invert_coords(coords):
+    return np.array([[y, x] for x, y in coords])
 
-    def set_buttons_enabled(self, state):
-        # state is a boolean
-        self.backgroundSelectorButton.setEnabled(state)
-        self.peakButton.setEnabled(state)
-        self.exportButton.setEnabled(state)
+def set_buttons_enabled(widget, state):
+    # state is a boolean
+    widget.backgroundSelectorButton.setEnabled(state)
+    widget.peakButton.setEnabled(state)
+    widget.exportButton.setEnabled(state)
 
-    def get_filter_points(self):
-        filter_ptss = {}
-        for name in WELL_NAMES:
-            filter_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._bg_points].data)).astype(np.uint8)
-        return filter_ptss
+def get_filter_points(viewer, bg_name):
+    filter_ptss = {}
+    for name in WELL_NAMES:
+        filter_ptss[name] = invert_coords(np.round(viewer.layers[name + bg_name].data)).astype(np.uint8)
+    return filter_ptss
 
-    def get_selected_cells(self):
-        selected_ptss = {}
-        for name in self.remaining_wells:
-            selected_ptss[name] = self.invert_coords(np.round(self.viewer.layers[name + self._peaks].data)).astype(np.uint8)
-        return selected_ptss
+def get_selected_cells(viewer, remaining_wells, peaks_name):
+    selected_ptss = {}
+    for name in remaining_wells:
+        selected_ptss[name] = invert_coords(np.round(viewer.layers[name + peaks_name].data)).astype(np.uint8)
+    return selected_ptss
 
-    def get_remaining_wells_from_layers(self):
-        peak_layers = [layer.name for layer in self.viewer.layers if 'peaks' in layer.name]
-        remaining_wells = [layer.name for layer in self.viewer.layers if len(layer.name.split()) == 1]
-        if len(peak_layers) == 0:
-            return remaining_wells
-        remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + self._peaks) for peak in peak_layers)]
-        return remaining_wells
+def get_remaining_wells_from_layers(viewer):
+    # kell ez a bonyolult verzió?
+    # peak_layers = [layer.name for layer in viewer.layers if 'peaks' in layer.name]
+    # remaining_wells = [layer.name for layer in viewer.layers if len(layer.name.split()) == 1]
+    # if len(peak_layers) == 0:
+    #     return remaining_wells
+    # remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + " peaks") for peak in peak_layers)]
 
-    def get_cell_line_by_coords(self, well_name, x, y):
-        current_line = self.well_data[well_name][0][:, x, y].copy()
-        if len(self.phases) > 0:
-            for p in self.phases:
+    remaining_wells = []
+    for layer in viewer.layers:
+        well_name = layer.name.split()[0]
+        if well_name not in remaining_wells:
+            remaining_wells.append(well_name)
+    return remaining_wells
+
+def get_cell_line_by_coords(well_data, x, y, phases):
+        # x and y must be between 0 and 80!
+        current_line = well_data[:, x, y].copy()
+        if len(phases) > 0:
+            for p in phases:
                 current_line[p] = np.nan
         return current_line
 
-    def range_type_changed(self):
-        if self.rangeTypeSelect.currentIndex() == 0:
-            num_of_phases = len(self.full_phases)
-            self.rangeMin.setMaximum(num_of_phases)
-            self.rangeMax.setMaximum(num_of_phases + 1)
-            self.rangeMax.setValue(num_of_phases + 1)
-        else:
-            frame_count = len(self.full_time)
-            self.rangeMin.setMaximum(frame_count)
-            self.rangeMax.setMaximum(frame_count)
-            self.rangeMax.setValue(frame_count)
+def update_preprocessing_params(widget):
+    return {
+        'flip': [widget.horizontalFlip.isChecked(), widget.verticalFlip.isChecked()],
+        'signal_range' : {
+        'range_type': widget.rangeTypeSelect.currentIndex(),
+        'ranges': [widget.rangeMin.value(), widget.rangeMax.value() if widget.rangeMax.value() != len(widget.full_phases)+1 else None], 
+        },
+        'drift_correction': {
+        'threshold': widget.threshold.value(),
+        'filter_method': widget.filterMethod.currentText(),
+        'background_selector': widget.background_selector,
+        }
+    }
+
+def update_localization_params(widget):
+    return {
+        'threshold_range': [widget.thresholdRangeMin.value(), widget.thresholdRangeMax.value()],
+        'neighbourhood_size': widget.neighbourhoodSize.value(),
+        'error_mask_filtering': widget.errorMaskFiltering.isChecked()
+    }
+
+def update_export_params(widget):
+    return {
+        'coordinates': widget.coordinates.isChecked(),
+        'preprocessed_signals': widget.preprocessedSignals.isChecked(),
+        'raw_signals': widget.rawSignals.isChecked(),
+        'average_signal': widget.averageSignal.isChecked(),
+        'breakdown_signal': widget.breakdownSignal.isChecked(),
+        'max_well': widget.maxWell.isChecked(),
+        'plot_signals_with_well': widget.plotSignalsWithWell.isChecked(),
+        'plot_well_with_coordinates': widget.plotWellWithCoordinates.isChecked(),
+        'plot_cells_individually': widget.plotCellsIndividually.isChecked(),
+        'signal_parts_by_phases': widget.signalPartsByPhases.isChecked(),
+        'max_centered_signals': widget.maxCenteredSignals.isChecked()
+    }
