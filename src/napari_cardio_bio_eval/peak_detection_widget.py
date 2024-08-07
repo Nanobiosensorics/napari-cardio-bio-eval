@@ -187,6 +187,7 @@ class PeakDetectionWidget(QWidget):
         self.progressBar.setMaximum(1)
         self.layout.addRow(self.progressBar)
 
+    # I think it needs to be a member function because it needs to be given to the rangeTypeSelect and can't be None
     def range_type_changed(self):
         if self.rangeTypeSelect.currentIndex() == 0:
             num_of_phases = len(self.full_phases)
@@ -207,61 +208,35 @@ class PeakDetectionWidget(QWidget):
 
     def load_data(self):
         self.preprocessing_params = update_preprocessing_params(self)
-
         self.cell_selector = False
-        loader = self.load_data_thread()
+        loader = load_data_thread(self)
         loader.start()
 
-    @thread_worker
-    def load_data_thread(self):
-        set_buttons_enabled(self, False)
-        path = self.dirLineEdit.text()
-        self.RESULT_PATH = os.path.join(path, 'result')
-        if not os.path.exists(self.RESULT_PATH):
-            os.mkdir(self.RESULT_PATH)
+    # @thread_worker
+    # def load_data_thread(self):
+    #     set_buttons_enabled(self, False)
+    #     path = self.dirLineEdit.text()
+    #     self.RESULT_PATH = os.path.join(path, 'result')
+    #     if not os.path.exists(self.RESULT_PATH):
+    #         os.mkdir(self.RESULT_PATH)
 
-        self.raw_wells, self.full_time, self.full_phases = load_data(path, flip=self.preprocessing_params['flip'])
-        self.filter_params, self.preprocessing_params_loaded, self.localization_params_loaded = load_params(self.RESULT_PATH)
+    #     self.raw_wells, self.full_time, self.full_phases = load_data(path, flip=self.preprocessing_params['flip'])
+    #     self.filter_params, self.preprocessing_params_loaded, self.localization_params_loaded = load_params(self.RESULT_PATH)
 
-        # we load in the parameters from the previous run if they exist
-        # and set the values in the GUI so it is clear what was used and can be changed
-        if self.preprocessing_params_loaded:
-            self.preprocessing_params = self.preprocessing_params_loaded
-            self.horizontalFlip.setChecked(self.preprocessing_params['flip'][0])
-            self.verticalFlip.setChecked(self.preprocessing_params['flip'][1])
-            self.rangeTypeSelect.setCurrentIndex(self.preprocessing_params['signal_range']['range_type'])
-            self.rangeMin.setValue(self.preprocessing_params['signal_range']['ranges'][0])
-            if self.preprocessing_params['signal_range']['ranges'][1] is None:
-                self.rangeMax.setValue(len(self.full_phases)+1)
-            else:
-                self.rangeMax.setValue(self.preprocessing_params['signal_range']['ranges'][1])
-            self.threshold.setValue(self.preprocessing_params['drift_correction']['threshold'])
-            self.filterMethod.setCurrentText(self.preprocessing_params['drift_correction']['filter_method'])
+    #     # we load in the parameters from the previous run if they exist
+    #     # and set the values in the GUI so it is clear what was used and can be changed
+    #     loaded_params_to_gui(self)
 
-        if self.localization_params_loaded:
-            self.localization_params = self.localization_params_loaded
-            self.thresholdRangeMin.setValue(self.localization_params['threshold_range'][0])
-            self.thresholdRangeMax.setValue(self.localization_params['threshold_range'][1])
-            self.neighbourhoodSize.setValue(self.localization_params['neighbourhood_size'])
-            self.errorMaskFiltering.setChecked(self.localization_params['error_mask_filtering'])
+    #     self.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(self.full_phases)]}, Time: {len(self.full_time)}')
+    #     self.rangeTypeSelect.currentIndexChanged.connect(self.range_type_changed)
+    #     # Enable the range selection
+    #     self.rangeTypeSelect.setEnabled(True)
+    #     self.rangeMin.setEnabled(True)
+    #     self.rangeMax.setEnabled(True)
+    #     # Set the extremes of the range
+    #     self.range_type_changed()
 
-        self.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(self.full_phases)]}, Time: {len(self.full_time)}')
-        self.rangeTypeSelect.currentIndexChanged.connect(self.range_type_changed)
-
-        # Enable the range selection
-        self.rangeTypeSelect.setEnabled(True)
-        self.rangeMin.setEnabled(True)
-        self.rangeMax.setEnabled(True)
-        if self.rangeTypeSelect.currentIndex() == 0:
-            self.rangeMin.setMaximum(len(self.full_phases))
-            self.rangeMax.setMaximum(len(self.full_phases)+1)
-            self.rangeMax.setValue(len(self.full_phases)+1)
-        else:
-            self.rangeMin.setMaximum(len(self.full_time))
-            self.rangeMax.setMaximum(len(self.full_time))
-            self.rangeMax.setValue(len(self.full_time))
-
-        self.processButton.setEnabled(True)
+    #     self.processButton.setEnabled(True)
 
     def preprocess_data(self):
         preprocessor = self.preprocess_data_thread()
@@ -271,9 +246,6 @@ class PeakDetectionWidget(QWidget):
     @thread_worker
     def preprocess_data_thread(self):
         self.preprocessing_params = update_preprocessing_params(self)
-        # It means that the range is set to the last phase or time point, it would be out of index
-        # if self.rangeMax.value() == len(self.full_phases)+1:
-        #     self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), None]
 
         self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
@@ -397,6 +369,32 @@ class PeakDetectionWidget(QWidget):
         exporter.start()
 
 @thread_worker
+def load_data_thread(widget):
+    set_buttons_enabled(widget, False)
+    path = widget.dirLineEdit.text()
+    widget.RESULT_PATH = os.path.join(path, 'result')
+    if not os.path.exists(widget.RESULT_PATH):
+        os.mkdir(widget.RESULT_PATH)
+
+    widget.raw_wells, widget.full_time, widget.full_phases = load_data(path, flip=widget.preprocessing_params['flip'])
+    widget.filter_params, widget.preprocessing_params_loaded, widget.localization_params_loaded = load_params(widget.RESULT_PATH)
+
+    # we load in the parameters from the previous run if they exist
+    # and set the values in the GUI so it is clear what was used and can be changed
+    loaded_params_to_gui(widget)
+
+    widget.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(widget.full_phases)]}, Time: {len(widget.full_time)}')
+    widget.rangeTypeSelect.currentIndexChanged.connect(widget.range_type_changed)
+    # Enable the range selection
+    widget.rangeTypeSelect.setEnabled(True)
+    widget.rangeMin.setEnabled(True)
+    widget.rangeMax.setEnabled(True)
+    # Set the extremes of the range
+    widget.range_type_changed()
+
+    widget.processButton.setEnabled(True)
+
+@thread_worker
 def export_res(widget):
     export_results(widget.export_params, widget.RESULT_PATH, widget.selected_ptss, widget.filter_ptss, widget.well_data, 
                    widget.time, widget.phases, widget.raw_wells, widget.full_time, widget.full_phases, widget.selected_range)
@@ -405,14 +403,34 @@ def clear_layers(viewer):
     viewer.layers.select_all()
     viewer.layers.remove_selected()
 
-def invert_coords(coords):
-    return np.array([[y, x] for x, y in coords])
-
-def set_buttons_enabled(widget, state):
-    # state is a boolean
+def set_buttons_enabled(widget, state: bool):
     widget.backgroundSelectorButton.setEnabled(state)
     widget.peakButton.setEnabled(state)
     widget.exportButton.setEnabled(state)
+
+def loaded_params_to_gui(widget):
+    if widget.preprocessing_params_loaded:
+        widget.preprocessing_params = widget.preprocessing_params_loaded
+        widget.horizontalFlip.setChecked(widget.preprocessing_params['flip'][0])
+        widget.verticalFlip.setChecked(widget.preprocessing_params['flip'][1])
+        widget.rangeTypeSelect.setCurrentIndex(widget.preprocessing_params['signal_range']['range_type'])
+        widget.rangeMin.setValue(widget.preprocessing_params['signal_range']['ranges'][0])
+        if widget.preprocessing_params['signal_range']['ranges'][1] is None:
+            widget.rangeMax.setValue(len(widget.full_phases)+1)
+        else:
+            widget.rangeMax.setValue(widget.preprocessing_params['signal_range']['ranges'][1])
+        widget.threshold.setValue(widget.preprocessing_params['drift_correction']['threshold'])
+        widget.filterMethod.setCurrentText(widget.preprocessing_params['drift_correction']['filter_method'])
+    
+    if widget.localization_params_loaded:
+        widget.localization_params = widget.localization_params_loaded
+        widget.thresholdRangeMin.setValue(widget.localization_params['threshold_range'][0])
+        widget.thresholdRangeMax.setValue(widget.localization_params['threshold_range'][1])
+        widget.neighbourhoodSize.setValue(widget.localization_params['neighbourhood_size'])
+        widget.errorMaskFiltering.setChecked(widget.localization_params['error_mask_filtering'])
+
+def invert_coords(coords):
+    return np.array([[y, x] for x, y in coords])
 
 def get_filter_points(viewer, bg_name):
     filter_ptss = {}
