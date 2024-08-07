@@ -212,42 +212,10 @@ class PeakDetectionWidget(QWidget):
         loader = load_data_thread(self)
         loader.start()
 
-    # @thread_worker
-    # def load_data_thread(self):
-    #     set_buttons_enabled(self, False)
-    #     path = self.dirLineEdit.text()
-    #     self.RESULT_PATH = os.path.join(path, 'result')
-    #     if not os.path.exists(self.RESULT_PATH):
-    #         os.mkdir(self.RESULT_PATH)
-
-    #     self.raw_wells, self.full_time, self.full_phases = load_data(path, flip=self.preprocessing_params['flip'])
-    #     self.filter_params, self.preprocessing_params_loaded, self.localization_params_loaded = load_params(self.RESULT_PATH)
-
-    #     # we load in the parameters from the previous run if they exist
-    #     # and set the values in the GUI so it is clear what was used and can be changed
-    #     loaded_params_to_gui(self)
-
-    #     self.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(self.full_phases)]}, Time: {len(self.full_time)}')
-    #     self.rangeTypeSelect.currentIndexChanged.connect(self.range_type_changed)
-    #     # Enable the range selection
-    #     self.rangeTypeSelect.setEnabled(True)
-    #     self.rangeMin.setEnabled(True)
-    #     self.rangeMax.setEnabled(True)
-    #     # Set the extremes of the range
-    #     self.range_type_changed()
-
-    #     self.processButton.setEnabled(True)
-
     def preprocess_data(self):
-        preprocessor = self.preprocess_data_thread()
+        preprocessor = preprocess_data_thread(self)
         preprocessor.finished.connect(self.load_and_preprocess_data_GUI)
         preprocessor.start()
-
-    @thread_worker
-    def preprocess_data_thread(self):
-        self.preprocessing_params = update_preprocessing_params(self)
-
-        self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
 
     def load_and_preprocess_data_GUI(self):
         clear_layers(self.viewer)
@@ -285,26 +253,9 @@ class PeakDetectionWidget(QWidget):
         self.localization_params = update_localization_params(self)
 
         self.cell_selector = True
-        peak_detector = self.peak_detection_thread()
-        peak_detector.finished.connect(self.peak_detection_GUI) 
+        peak_detector = peak_detection_thread(self)
+        peak_detector.finished.connect(self.peak_detection_GUI)
         peak_detector.start()
-
-    @thread_worker
-    def peak_detection_thread(self):
-        set_buttons_enabled(self, False)
-        if self.background_selector:
-            self.filter_ptss = get_filter_points(self.viewer, self._bg_points)
-
-        self.preprocessing_params = update_preprocessing_params(self)
-        self.localization_params = update_localization_params(self)
-
-        self.background_selector = False
-
-        # From here the well data contains the wells, the selected points and the filter points (which are the background points)
-        self.well_data = localization(self.preprocessing_params, self.localization_params,
-                                      self.raw_wells, self.selected_range, self.filter_ptss)
-
-        self.remaining_wells = get_remaining_wells_from_layers(self.viewer)
 
     def peak_detection_GUI(self):
         clear_layers(self.viewer)
@@ -332,18 +283,7 @@ class PeakDetectionWidget(QWidget):
 
         # add a double click callback to all of the layers
         # the well name in the layer name is important to get the selected layer
-        for layer in self.viewer.layers:
-            @layer.mouse_double_click_callbacks.append
-            def update_plot_on_double_click(layer, event):
-                try:
-                    name = layer.name.split(' ')[0]
-                    ax.clear()
-                    current_line = get_cell_line_by_coords(self.well_data[name][0], int(event.position[1]), int(event.position[2]), self.phases)
-                    (line,) = ax.plot(self.time, current_line)
-                    ax.set_title(f"Well: {name}, Cell: [{int(event.position[1])} {int(event.position[2])}]")
-                    line.figure.canvas.draw()
-                except IndexError:
-                    pass
+        add_double_click_callbacks_to_layers(self, ax)
         
         # Once the peak detection is started new data cant be loaded
         set_buttons_enabled(self, True)
@@ -393,6 +333,28 @@ def load_data_thread(widget):
     widget.range_type_changed()
 
     widget.processButton.setEnabled(True)
+
+@thread_worker
+def preprocess_data_thread(widget):
+    widget.preprocessing_params = update_preprocessing_params(widget)
+
+    widget.well_data, widget.time, widget.phases, widget.filter_ptss, widget.selected_range = preprocessing(widget.preprocessing_params, widget.raw_wells, widget.full_time, widget.full_phases, widget.filter_params)
+
+@thread_worker
+def peak_detection_thread(widget):
+    set_buttons_enabled(widget, False)
+    widget.preprocessing_params = update_preprocessing_params(widget)
+    widget.localization_params = update_localization_params(widget)
+
+    if widget.background_selector:
+        widget.filter_ptss = get_filter_points(widget.viewer, widget._bg_points)
+    widget.background_selector = False
+
+    # From here the well data contains the wells, the selected points and the filter points (which are the background points)
+    widget.well_data = localization(widget.preprocessing_params, widget.localization_params,
+                                    widget.raw_wells, widget.selected_range, widget.filter_ptss)
+
+    widget.remaining_wells = get_remaining_wells_from_layers(widget.viewer)
 
 @thread_worker
 def export_res(widget):
@@ -502,3 +464,17 @@ def update_export_params(widget):
         'signal_parts_by_phases': widget.signalPartsByPhases.isChecked(),
         'max_centered_signals': widget.maxCenteredSignals.isChecked()
     }
+
+def add_double_click_callbacks_to_layers(widget, ax):
+    for layer in widget.viewer.layers:
+        @layer.mouse_double_click_callbacks.append
+        def update_plot_on_double_click(layer, event):
+            try:
+                name = layer.name.split(' ')[0]
+                ax.clear()
+                current_line = get_cell_line_by_coords(widget.well_data[name][0], int(event.position[1]), int(event.position[2]), widget.phases)
+                (line,) = ax.plot(widget.time, current_line)
+                ax.set_title(f"Well: {name}, Cell: [{int(event.position[1])} {int(event.position[2])}]")
+                line.figure.canvas.draw()
+            except IndexError:
+                pass
