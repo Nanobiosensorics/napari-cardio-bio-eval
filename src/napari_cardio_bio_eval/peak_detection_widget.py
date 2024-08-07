@@ -24,6 +24,7 @@ class PeakDetectionWidget(QWidget):
         self._bg_points = " background points"
         self.docked_plot = None
         self.background_selector = False
+        self.cell_selector = False
         self.full_phases = []
         self.initUI()
 
@@ -99,7 +100,7 @@ class PeakDetectionWidget(QWidget):
         manBGsel.setStyleSheet("QLabel { font-size: 10pt; font-weight: bold; }")
         self.layout.addRow(manBGsel)
         self.backgroundSelectorButton = QPushButton('Select Background Points Manually', self)
-        self.backgroundSelectorButton.clicked.connect(self.manual_background_selection)
+        self.backgroundSelectorButton.clicked.connect(self.bg_selection)
         self.backgroundSelectorButton.setEnabled(False)
         self.layout.addRow(self.backgroundSelectorButton)
 
@@ -208,87 +209,30 @@ class PeakDetectionWidget(QWidget):
 
     def load_data(self):
         self.preprocessing_params = update_preprocessing_params(self)
-        self.cell_selector = False
         loader = load_data_thread(self)
         loader.start()
 
     def preprocess_data(self):
         preprocessor = preprocess_data_thread(self)
-        preprocessor.finished.connect(self.load_and_preprocess_data_GUI)
+        preprocessor.finished.connect(self.show_wells_GUI)
         preprocessor.start()
 
-    def load_and_preprocess_data_GUI(self):
-        clear_layers(self.viewer)
-        for name in WELL_NAMES:
-            visible = (name == WELL_NAMES[0])
-            self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
+    def show_wells_GUI(self):
+        load_and_preprocess_data_GUI(self)
 
-        self.peakButton.setEnabled(True)
-        self.backgroundSelectorButton.setEnabled(True)
-
-    def manual_background_selection(self):
-        self.background_selector = True
-        
-        if self.docked_plot is not None:
-            self.viewer.window.remove_dock_widget(widget=self.docked_plot)
-            self.docked_plot = None
-
-        clear_layers(self.viewer)
-
-        for name in WELL_NAMES:
-            visible = (name == WELL_NAMES[0])
-            # if the peak detection happened once the well_data contains more data: the wells, the selected points and the filter points
-            # so we need to select the first element of the tuple
-            if self.cell_selector:
-                self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
-            else:
-                self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_points(invert_coords(self.filter_ptss[name]), name=name + self._bg_points, size=1, face_color='orange', visible=visible)
-
-        # Once the background selection is started new data cant be loaded
-        self.loadButton.setEnabled(False)
-        self.processButton.setEnabled(False)
+    def bg_selection(self):
+        manual_background_selection(self)
 
     def peak_detection(self):
         self.localization_params = update_localization_params(self)
 
         self.cell_selector = True
         peak_detector = peak_detection_thread(self)
-        peak_detector.finished.connect(self.peak_detection_GUI)
+        peak_detector.finished.connect(self.show_peaks_GUI)
         peak_detector.start()
 
-    def peak_detection_GUI(self):
-        clear_layers(self.viewer)
-        # visualize the data with peaks
-        for name in self.remaining_wells:
-            visible = (name == self.remaining_wells[0])
-            self.viewer.add_image(self.well_data[name][0], name=name, colormap='viridis', visible=visible)
-            # invert the coordinates of the peaks to plot in napari (later invert back for other plots)
-            self.viewer.add_points(invert_coords(self.well_data[name][1]), name=name + self._peaks, size=1, face_color='red', visible=visible)
-            # filter points for background selection
-            # self.viewer.add_points(invert_coords(self.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
-
-        current_line = get_cell_line_by_coords(self.well_data[self.remaining_wells[-1]][0], 0, 0, self.phases)
-
-        if self.docked_plot is not None:
-            self.viewer.window.remove_dock_widget(widget=self.docked_plot)
-            
-        # create mpl figure with subplots
-        mpl_fig = plt.figure()
-        ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
-        (line,) = ax.plot(self.time, current_line)
-        # add the figure to the viewer as a FigureCanvas widget
-        self.docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig), name='Cell signal plot')
-        self.docked_plot.setMinimumSize(200, 300)
-
-        # add a double click callback to all of the layers
-        # the well name in the layer name is important to get the selected layer
-        add_double_click_callbacks_to_layers(self, ax)
-        
-        # Once the peak detection is started new data cant be loaded
-        set_buttons_enabled(self, True)
-        self.loadButton.setEnabled(False)
-        self.processButton.setEnabled(False)
+    def show_peaks_GUI(self):
+        peak_detection_GUI(self)
 
     def export_data(self):
         self.export_params = update_export_params(self)
@@ -321,7 +265,7 @@ def load_data_thread(widget):
 
     # we load in the parameters from the previous run if they exist
     # and set the values in the GUI so it is clear what was used and can be changed
-    loaded_params_to_gui(widget)
+    loaded_params_to_GUI(widget)
 
     widget.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(widget.full_phases)]}, Time: {len(widget.full_time)}')
     widget.rangeTypeSelect.currentIndexChanged.connect(widget.range_type_changed)
@@ -361,6 +305,84 @@ def export_res(widget):
     export_results(widget.export_params, widget.RESULT_PATH, widget.selected_ptss, widget.filter_ptss, widget.well_data, 
                    widget.time, widget.phases, widget.raw_wells, widget.full_time, widget.full_phases, widget.selected_range)
 
+def manual_background_selection(widget):
+    widget.background_selector = True
+
+    if widget.docked_plot is not None:
+        widget.viewer.window.remove_dock_widget(widget=widget.docked_plot)
+        widget.docked_plot = None
+
+    clear_layers(widget.viewer)
+
+    for name in WELL_NAMES:
+        visible = (name == WELL_NAMES[0])
+        # if the peak detection happened once the well_data contains more data: the wells, the selected points and the filter points
+        # so we need to select the first element of the tuple
+        if widget.cell_selector:
+            widget.viewer.add_image(widget.well_data[name][0], name=name, colormap='viridis', visible=visible)
+        else:
+            widget.viewer.add_image(widget.well_data[name], name=name, colormap='viridis', visible=visible)
+        widget.viewer.add_points(invert_coords(widget.filter_ptss[name]), name=name + widget._bg_points, size=1, face_color='orange', visible=visible)
+
+    # Once the background selection is started new data cant be loaded
+    widget.loadButton.setEnabled(False)
+    widget.processButton.setEnabled(False)
+
+def load_and_preprocess_data_GUI(widget):
+    clear_layers(widget.viewer)
+    for name in WELL_NAMES:
+        visible = (name == WELL_NAMES[0])
+        widget.viewer.add_image(widget.well_data[name], name=name, colormap='viridis', visible=visible)
+
+    widget.peakButton.setEnabled(True)
+    widget.backgroundSelectorButton.setEnabled(True)
+
+def peak_detection_GUI(widget):
+    clear_layers(widget.viewer)
+    for name in widget.remaining_wells:
+        visible = (name == widget.remaining_wells[0])
+        widget.viewer.add_image(widget.well_data[name][0], name=name, colormap='viridis', visible=visible)
+        # invert the coordinates of the peaks to plot in napari (later invert back for other plots)
+        widget.viewer.add_points(invert_coords(widget.well_data[name][1]), name=name + widget._peaks, size=1, face_color='red', visible=visible)
+        # filter points for background selection
+        # widget.viewer.add_points(invert_coords(widget.well_data[name][-1]), name=name + ' filter', size=1, face_color='blue', visible=visible)
+
+    current_line = get_cell_line_by_coords(widget.well_data[widget.remaining_wells[0]][0], 0, 0, widget.phases)
+
+    if widget.docked_plot is not None:
+        widget.viewer.window.remove_dock_widget(widget=widget.docked_plot)
+        
+    # create mpl figure with subplots
+    mpl_fig = plt.figure()
+    ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
+    (line,) = ax.plot(widget.time, current_line)
+    # add the figure to the viewer as a FigureCanvas widget
+    widget.docked_plot = widget.viewer.window.add_dock_widget(FigureCanvas(mpl_fig), name='Cell signal plot')
+    widget.docked_plot.setMinimumSize(200, 300)
+
+    # add a double click callback to all of the layers
+    # the well name in the layer name is important to get the selected layer
+    add_double_click_callbacks_to_layers(widget, ax)
+    
+    # Once the peak detection is started new data cant be loaded
+    set_buttons_enabled(widget, True)
+    widget.loadButton.setEnabled(False)
+    widget.processButton.setEnabled(False)
+
+def add_double_click_callbacks_to_layers(widget, ax):
+    for layer in widget.viewer.layers:
+        @layer.mouse_double_click_callbacks.append
+        def update_plot_on_double_click(layer, event):
+            try:
+                name = layer.name.split(' ')[0]
+                ax.clear()
+                current_line = get_cell_line_by_coords(widget.well_data[name][0], int(event.position[1]), int(event.position[2]), widget.phases)
+                (line,) = ax.plot(widget.time, current_line)
+                ax.set_title(f"Well: {name}, Cell: [{int(event.position[1])} {int(event.position[2])}]")
+                line.figure.canvas.draw()
+            except IndexError:
+                pass
+
 def clear_layers(viewer):
     viewer.layers.select_all()
     viewer.layers.remove_selected()
@@ -370,7 +392,7 @@ def set_buttons_enabled(widget, state: bool):
     widget.peakButton.setEnabled(state)
     widget.exportButton.setEnabled(state)
 
-def loaded_params_to_gui(widget):
+def loaded_params_to_GUI(widget):
     if widget.preprocessing_params_loaded:
         widget.preprocessing_params = widget.preprocessing_params_loaded
         widget.horizontalFlip.setChecked(widget.preprocessing_params['flip'][0])
@@ -407,7 +429,7 @@ def get_selected_cells(viewer, remaining_wells, peaks_name):
     return selected_ptss
 
 def get_remaining_wells_from_layers(viewer):
-    # kell ez a bonyolult verzió?
+    # kell ez a bonyolult verzió? mert ha egyszerűbb akkor nehezebb véletlen törölni és kompatibilis is minden layer kiosztással
     # peak_layers = [layer.name for layer in viewer.layers if 'peaks' in layer.name]
     # remaining_wells = [layer.name for layer in viewer.layers if len(layer.name.split()) == 1]
     # if len(peak_layers) == 0:
@@ -464,17 +486,3 @@ def update_export_params(widget):
         'signal_parts_by_phases': widget.signalPartsByPhases.isChecked(),
         'max_centered_signals': widget.maxCenteredSignals.isChecked()
     }
-
-def add_double_click_callbacks_to_layers(widget, ax):
-    for layer in widget.viewer.layers:
-        @layer.mouse_double_click_callbacks.append
-        def update_plot_on_double_click(layer, event):
-            try:
-                name = layer.name.split(' ')[0]
-                ax.clear()
-                current_line = get_cell_line_by_coords(widget.well_data[name][0], int(event.position[1]), int(event.position[2]), widget.phases)
-                (line,) = ax.plot(widget.time, current_line)
-                ax.set_title(f"Well: {name}, Cell: [{int(event.position[1])} {int(event.position[2])}]")
-                line.figure.canvas.draw()
-            except IndexError:
-                pass
