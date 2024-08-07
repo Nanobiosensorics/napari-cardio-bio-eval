@@ -32,7 +32,7 @@ class PeakDetectionWidget(QWidget):
         self.browseBox = QHBoxLayout()
         self.dirLineEdit = QLineEdit(self)
         self.browseButton = QPushButton('Browse', self)
-        self.browseButton.clicked.connect(self.open_file_name_dialog)
+        self.browseButton.clicked.connect(self.select_data_dir_dialog)
         self.browseBox.addWidget(self.dirLineEdit)
         self.browseBox.addWidget(self.browseButton)
         self.layout.addRow(QLabel('Select Directory:'), self.browseBox)
@@ -194,9 +194,8 @@ class PeakDetectionWidget(QWidget):
             self.rangeMax.setMaximum(frame_count)
             self.rangeMax.setValue(frame_count)
 
-    def open_file_name_dialog(self):
-        options = QFileDialog.Options()
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory")
+    def select_data_dir_dialog(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Data Directory")
         if directory:
             self.dirLineEdit.setText(directory)
 
@@ -212,6 +211,7 @@ class PeakDetectionWidget(QWidget):
 
     def show_wells_GUI(self):
         load_and_preprocess_data_GUI(self)
+        self.peakButton.setEnabled(True)
 
     def bg_selection(self):
         manual_background_selection(self)

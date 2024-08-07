@@ -14,7 +14,6 @@ from matplotlib.backends.backend_qt5agg import FigureCanvas
 # thread worker functions
 @thread_worker
 def load_data_thread(widget):
-    set_buttons_enabled(widget, False)
     path = widget.dirLineEdit.text()
     widget.RESULT_PATH = os.path.join(path, 'result')
     if not os.path.exists(widget.RESULT_PATH):
@@ -46,7 +45,9 @@ def preprocess_data_thread(widget):
 
 @thread_worker
 def peak_detection_thread(widget):
-    set_buttons_enabled(widget, False)
+    widget.backgroundSelectorButton.setEnabled(False)
+    widget.peakButton.setEnabled(False)
+    widget.exportButton.setEnabled(False)
     widget.preprocessing_params = update_preprocessing_params(widget)
     widget.localization_params = update_localization_params(widget)
 
@@ -96,7 +97,6 @@ def load_and_preprocess_data_GUI(widget):
         visible = (name == WELL_NAMES[0])
         widget.viewer.add_image(widget.well_data[name], name=name, colormap='viridis', visible=visible)
 
-    widget.peakButton.setEnabled(True)
     widget.backgroundSelectorButton.setEnabled(True)
 
 def peak_detection_GUI(widget):
@@ -127,7 +127,9 @@ def peak_detection_GUI(widget):
     add_double_click_callbacks_to_layers(widget, ax)
     
     # Once the peak detection is started new data cant be loaded
-    set_buttons_enabled(widget, True)
+    widget.backgroundSelectorButton.setEnabled(True)
+    widget.peakButton.setEnabled(True)
+    widget.exportButton.setEnabled(True)
     widget.loadButton.setEnabled(False)
     widget.processButton.setEnabled(False)
 
@@ -152,11 +154,6 @@ def invert_coords(coords):
 def clear_layers(viewer):
     viewer.layers.select_all()
     viewer.layers.remove_selected()
-
-def set_buttons_enabled(widget, state: bool):
-    widget.backgroundSelectorButton.setEnabled(state)
-    widget.peakButton.setEnabled(state)
-    widget.exportButton.setEnabled(state)
 
 def loaded_params_to_GUI(widget):
     if widget.preprocessing_params_loaded:

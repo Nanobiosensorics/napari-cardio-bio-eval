@@ -10,6 +10,7 @@ from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout,
                             QLabel, QSpinBox, QComboBox, QCheckBox, 
                             QProgressBar)
 
+from napari_cardio_bio_eval.widget_utils import *
 from nanobio_core.epic_cardio.processing import RangeType, load_data, load_params, preprocessing, localization, save_params
 from nanobio_core.epic_cardio.defs import WELL_NAMES
 from export_and_plot.export import export_results
@@ -24,7 +25,9 @@ class SegmentationWidget(QWidget):
         self.viewer = viewer
         self._segment = " segment"
         self._bg_points = " background points"
+        self.background_selector = False
         self.docked_plot = None
+        self.full_phases = []
         self.initUI()
 
     def initUI(self):
@@ -93,6 +96,15 @@ class SegmentationWidget(QWidget):
         self.processButton.setEnabled(False)
         self.processButton.clicked.connect(self.preprocess_data)
         self.layout.addRow(self.processButton)
+        
+        # Manual Background selection
+        manBGsel = QLabel('Manual background selection if needed:')
+        manBGsel.setStyleSheet("QLabel { font-size: 10pt; font-weight: bold; }")
+        self.layout.addRow(manBGsel)
+        self.backgroundSelectorButton = QPushButton('Select Background Points Manually', self)
+        self.backgroundSelectorButton.clicked.connect(self.bg_selection)
+        self.backgroundSelectorButton.setEnabled(False)
+        self.layout.addRow(self.backgroundSelectorButton)
 
         # Segmentation
         self.modelPath = QLineEdit(self)
@@ -135,74 +147,34 @@ class SegmentationWidget(QWidget):
         if model_path:
             self.modelPath.setText(model_path)
 
-    def load_data(self):
-        self.preprocessing_params = {
-            'flip': [self.horizontalFlip.isChecked(), self.verticalFlip.isChecked()],
-            'signal_range' : {
-            'range_type': RangeType.MEASUREMENT_PHASE,
-            'ranges': [0, None], 
-            },
-            'drift_correction': {
-            'threshold': self.threshold.value(),
-            'filter_method': self.filterMethod.currentText(),
-            'background_selector': False,
-            }
-        }
+    def range_type_changed(self):
+        if self.rangeTypeSelect.currentIndex() == 0:
+            num_of_phases = len(self.full_phases)
+            self.rangeMin.setMaximum(num_of_phases)
+            self.rangeMax.setMaximum(num_of_phases + 1)
+            self.rangeMax.setValue(num_of_phases + 1)
+        else:
+            frame_count = len(self.full_time)
+            self.rangeMin.setMaximum(frame_count)
+            self.rangeMax.setMaximum(frame_count)
+            self.rangeMax.setValue(frame_count)
 
-        self.cell_selector = False
-        loader = self.load_data_thread()
+    def load_data(self):
+        self.preprocessing_params = update_preprocessing_params(self)
+        loader = load_data_thread(self)
         loader.start()
 
-    @thread_worker
-    def load_data_thread(self):
-        self.exportButton.setEnabled(False)
-        path = self.dirLineEdit.text()
-        self.RESULT_PATH = os.path.join(path, 'result')
-        if not os.path.exists(self.RESULT_PATH):
-            os.mkdir(self.RESULT_PATH)
-
-        self.raw_wells, self.full_time, self.full_phases = load_data(path, flip=self.preprocessing_params['flip'])
-        self.filter_params, _, _ = load_params(self.RESULT_PATH)
-
-        self.rangeLabel.setText(f'Phases: {[(n+1, p) for n, p in enumerate(self.full_phases)]}, Time: {len(self.full_time)}')
-        self.rangeTypeSelect.currentIndexChanged.connect(self.range_type_changed)
-        # Enable the range selection
-        self.rangeTypeSelect.setEnabled(True)
-        self.rangeMin.setEnabled(True)
-        self.rangeMax.setEnabled(True)
-        self.rangeMin.setMaximum(len(self.full_time))
-        self.rangeMax.setMaximum(len(self.full_time))
-        self.rangeMax.setValue(len(self.full_time))
-
-        self.processButton.setEnabled(True)
-
     def preprocess_data(self):
-        preprocessor = self.preprocess_data_thread()
-        preprocessor.finished.connect(self.load_and_preprocess_data_GUI)
+        preprocessor = preprocess_data_thread(self)
+        preprocessor.finished.connect(self.show_wells_GUI)
         preprocessor.start()
 
-    @thread_worker
-    def preprocess_data_thread(self):
-        if self.rangeTypeSelect.currentIndex() == 0:
-            self.preprocessing_params['signal_range']['range_type'] = RangeType.MEASUREMENT_PHASE
-        else:
-            self.preprocessing_params['signal_range']['range_type'] = RangeType.INDIVIDUAL_POINT
-
-        # It means that the range is set to the last phase or time point, it would be out of index
-        if self.rangeMax.value() == len(self.full_phases) + 1:
-            self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), None]
-        else:
-            self.preprocessing_params['signal_range']['ranges'] = [self.rangeMin.value(), self.rangeMax.value()]
-
-        self.well_data, self.time, self.phases, self.filter_ptss, self.selected_range = preprocessing(self.preprocessing_params, self.raw_wells, self.full_time, self.full_phases, self.filter_params)
-
-    def load_and_preprocess_data_GUI(self):
-        clear_layers(self.viewer)
-        for name in WELL_NAMES:
-            visible = (name == WELL_NAMES[0])
-            self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-
+    def show_wells_GUI(self):
+        load_and_preprocess_data_GUI(self)
         self.segmentationButton.setEnabled(True)
+
+    def bg_selection(self):
+        manual_background_selection(self)
 
     def segmentation(self):
         self.segmentationButton.setEnabled(False)
@@ -264,7 +236,7 @@ class SegmentationWidget(QWidget):
         if self.docked_plot is not None:
             self.viewer.window.remove_dock_widget(widget=self.docked_plot)
         
-        current_line = get_cell_line_by_coords(self.well_data, WELL_NAMES[-1], 0, 0, self.phases)
+        current_line = get_cell_line_by_coords(self.well_data[WELL_NAMES[0]], 0, 0, self.phases)
 
         # create mpl figure with subplots
         mpl_fig = plt.figure()
@@ -293,7 +265,7 @@ class SegmentationWidget(QWidget):
                     x = max(0, min(x, 79))
                     y = max(0, min(y, 79))
 
-                    current_line = get_cell_line_by_coords(self.well_data, name, x, y, self.phases)
+                    current_line = get_cell_line_by_coords(self.well_data[name], x, y, self.phases)
                     (line,) = ax.plot(self.time, current_line)
                     ax.set_title(f"Well: {name}, Cell: [{x} {y}]")
                     line.figure.canvas.draw()
@@ -330,45 +302,9 @@ class SegmentationWidget(QWidget):
         
         self.progressBar.setMaximum(1)
 
-    def range_type_changed(self):
-        if self.rangeTypeSelect.currentIndex() == 0:
-            num_of_phases = len(self.full_phases)
-            self.rangeMin.setMaximum(num_of_phases)
-            self.rangeMax.setMaximum(num_of_phases + 1)
-            self.rangeMax.setValue(num_of_phases + 1)
-        else:
-            frame_count = len(self.full_time)
-            self.rangeMin.setMaximum(frame_count)
-            self.rangeMax.setMaximum(frame_count)
-            self.rangeMax.setValue(frame_count)
+    
 
-def clear_layers(viewer):
-    viewer.layers.select_all()
-    viewer.layers.remove_selected()
 
-def get_remaining_wells_from_layers(viewer):
-    remaining_wells = []
-    for layer in viewer.layers:
-        well_name = layer.name.split()[0]
-        if well_name not in remaining_wells:
-            remaining_wells.append(well_name)
-    return remaining_wells
-
-    # érdemes túlbonyolítani?
-    # other_layers = [layer.name for layer in viewer.layers if 'segment' in layer.name]
-    # remaining_wells = [layer.name for layer in viewer.layers if len(layer.name.split()) == 1]
-    # if len(other_layers) == 0:
-    #     return remaining_wells
-    # remaining_wells = [well for well in remaining_wells if any(peak.startswith(well + self._segment) for peak in other_layers)]
-    # return remaining_wells
-
-def get_cell_line_by_coords(well_data, well_name, x, y, phases):
-        # x and y must be between 0 and 80!
-        current_line = well_data[well_name][:, x, y].copy()
-        if len(phases) > 0:
-            for p in phases:
-                current_line[p] = np.nan
-        return current_line
 
 def get_cell_centers(output):
     cell_centers = []
@@ -377,9 +313,6 @@ def get_cell_centers(output):
         _, _, _, centers = cv2.connectedComponentsWithStats(pred, connectivity=8)
         cell_centers.append(centers[1:])
     return cell_centers
-
-def invert_coords(coords):
-        return np.array([[y, x] for x, y in coords])
 
 def lin_indices(original_length, subsampled_length):
     indices = np.linspace(0, original_length - 1, subsampled_length + 1, dtype=int)
