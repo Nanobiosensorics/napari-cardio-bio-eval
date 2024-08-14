@@ -64,32 +64,32 @@ def peak_detection_thread(widget):
     widget.remaining_wells = get_remaining_wells_from_layers(widget.viewer)
 
 @thread_worker
-def segmentation_thread(self):
-    self.model = torch.jit.load(self.modelPath.text())
+def segmentation_thread(widget):
+    widget.model = torch.jit.load(widget.modelPath.text())
     biosensor = []
     # the indices length may vary later but for now it is 8
     bio_len = 8
     for name in WELL_NAMES: # remaining_wells?
-        biosensor.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
+        biosensor.append(widget.well_data[name][lin_indices(widget.well_data[name].shape[0], bio_len)])
 
     biosensor_tensor = torch.tensor(np.array(biosensor)).float() 
 
     with torch.no_grad():
-        output = self.model(biosensor_tensor)
+        output = widget.model(biosensor_tensor)
 
-    self.image_size = output.shape[2]
-    self.scaling_factor = self.image_size // 80
+    widget.image_size = output.shape[2]
+    widget.scaling_factor = widget.image_size // 80
 
     output = torch.sigmoid(output).squeeze().detach().numpy()
-    self.bin_output = (output > 0.5).astype(int)
+    widget.bin_output = (output > 0.5).astype(int)
 
-    self.cell_centers = []
-    self.labels = []
+    widget.cell_centers = []
+    widget.labels = []
     for i in range(len(WELL_NAMES)):
-        pred = self.bin_output[i].squeeze().astype(np.uint8)
+        pred = widget.bin_output[i].squeeze().astype(np.uint8)
         _, labels, _, centers = cv2.connectedComponentsWithStats(pred, connectivity=8)
-        self.cell_centers.append(centers[1:])
-        self.labels.append(labels)
+        widget.cell_centers.append(centers[1:])
+        widget.labels.append(labels)
 
 @thread_worker
 def export_results_thread(widget):
@@ -102,8 +102,11 @@ def manual_background_selection(widget):
     widget.background_selector = True
 
     if widget.docked_plot is not None:
-        widget.viewer.window.remove_dock_widget(widget=widget.docked_plot)
-        widget.docked_plot = None
+        try:
+            widget.viewer.window.remove_dock_widget(widget=widget.docked_plot)
+            widget.docked_plot = None
+        except Exception as e:
+            pass
 
     clear_layers(widget.viewer)
 
@@ -151,41 +154,41 @@ def peak_detection_GUI(widget):
     widget.loadButton.setEnabled(False)
     widget.processButton.setEnabled(False)
 
-def SRUNet_segmentation_GUI(self):
-    clear_layers(self.viewer)
+def SRUNet_segmentation_GUI(widget):
+    clear_layers(widget.viewer)
     for i in range(len(WELL_NAMES)):
         visible = (i == 0)
         name = WELL_NAMES[i]            
-        well_tensor = torch.tensor(self.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
-        upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(self.image_size, self.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
-        self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
-        self.viewer.add_labels(self.labels[i], name=name + self._segment, visible=visible)
+        well_tensor = torch.tensor(widget.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
+        upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(widget.image_size, widget.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
+        widget.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
+        widget.viewer.add_labels(widget.labels[i], name=name + widget._segment, visible=visible)
 
-    current_line = get_cell_line_by_coords(self.well_data[WELL_NAMES[0]], 0, 0, self.phases)
-    plot_GUI(self, self.well_data, current_line)
+    current_line = get_cell_line_by_coords(widget.well_data[WELL_NAMES[0]], 0, 0, widget.phases)
+    plot_GUI(widget, widget.well_data, current_line)
 
-    self.loadButton.setEnabled(False)
-    self.processButton.setEnabled(False)   
-    self.exportButton.setEnabled(True)
-    self.segmentationButton.setEnabled(True)
-    self.segmentationButton.setText("Segment")
+    widget.loadButton.setEnabled(False)
+    widget.processButton.setEnabled(False)   
+    widget.exportButton.setEnabled(True)
+    widget.segmentationButton.setEnabled(True)
+    widget.segmentationButton.setText("Segment")
 
-def UNet_segmentation_GUI(self):
-    clear_layers(self.viewer)
+def UNet_segmentation_GUI(widget):
+    clear_layers(widget.viewer)
     for i in range(len(WELL_NAMES)):
         visible = (i == 0)
         name = WELL_NAMES[i]
-        self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-        self.viewer.add_labels(self.labels[i], name=name + self._segment, visible=visible)
+        widget.viewer.add_image(widget.well_data[name], name=name, colormap='viridis', visible=visible)
+        widget.viewer.add_labels(widget.labels[i], name=name + widget._segment, visible=visible)
 
-    current_line = get_cell_line_by_coords(self.well_data[WELL_NAMES[0]], 0, 0, self.phases)
-    plot_GUI(self, self.well_data, current_line)
+    current_line = get_cell_line_by_coords(widget.well_data[WELL_NAMES[0]], 0, 0, widget.phases)
+    plot_GUI(widget, widget.well_data, current_line)
     
-    self.loadButton.setEnabled(False)
-    self.processButton.setEnabled(False)   
-    self.exportButton.setEnabled(True)
-    self.segmentationButton.setEnabled(True)
-    self.segmentationButton.setText("Segment")
+    widget.loadButton.setEnabled(False)
+    widget.processButton.setEnabled(False)   
+    widget.exportButton.setEnabled(True)
+    widget.segmentationButton.setEnabled(True)
+    widget.segmentationButton.setText("Segment")
 
 def plot_GUI(widget, well_data, current_line):
     if widget.docked_plot is not None:
@@ -264,7 +267,7 @@ def loaded_params_to_GUI(widget):
         widget.neighbourhoodSize.setValue(widget.localization_params['neighbourhood_size'])
         widget.errorMaskFiltering.setChecked(widget.localization_params['error_mask_filtering'])
 
-def get_filter_points(viewer, bg_name):
+def get_filter_points(viewer, bg_name=" background points"):
     filter_ptss = {}
     for name in WELL_NAMES:
         filter_ptss[name] = invert_coords(np.round(viewer.layers[name + bg_name].data)).astype(np.uint8)

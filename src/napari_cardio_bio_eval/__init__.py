@@ -10,8 +10,8 @@ __all__ = (
 )
 
 viewer = napari.Viewer()
-# widget = PeakDetectionWidget(viewer)
-widget = SegmentationWidget(viewer)
+widget = PeakDetectionWidget(viewer)
+# widget = SegmentationWidget(viewer)
 viewer.window.add_dock_widget(widget, area="right")
 widget.dirLineEdit.setText("C:/Users/wittd/Desktop/epic_data")
 
