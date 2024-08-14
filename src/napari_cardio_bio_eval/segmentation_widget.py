@@ -107,6 +107,9 @@ class SegmentationWidget(QWidget):
         self.layout.addRow(self.backgroundSelectorButton)
 
         # Segmentation
+        segmentLabel = QLabel('Segmentation:')
+        segmentLabel.setStyleSheet("QLabel { font-size: 11pt; font-weight: bold; }")
+        self.layout.addRow(segmentLabel)
         self.modelPath = QLineEdit(self)
         self.browseModelLayout = QHBoxLayout()
         self.browseModelButton = QPushButton('Browse', self)
@@ -114,9 +117,6 @@ class SegmentationWidget(QWidget):
         self.browseModelLayout.addWidget(self.modelPath)
         self.browseModelLayout.addWidget(self.browseModelButton)
         self.layout.addRow(QLabel('Select segmentation model:'), self.browseModelLayout)
-
-        self.showCellCenters = QCheckBox('Show cell centers', self)
-        self.layout.addRow(self.showCellCenters)
 
         self.segmentationButton = QPushButton('Segment', self)
         self.segmentationButton.setEnabled(False)
@@ -173,6 +173,7 @@ class SegmentationWidget(QWidget):
         load_and_preprocess_data_GUI(self)
         self.segmentationButton.setEnabled(True)
 
+    # ez után is megint draw error van
     def bg_selection(self):
         manual_background_selection(self)
 
@@ -180,104 +181,15 @@ class SegmentationWidget(QWidget):
         self.segmentationButton.setEnabled(False)
         self.segmentationButton.setText("Segmenting...")
 
-        self.model = torch.jit.load(self.modelPath.text())
+        segmentation = segmentation_thread(self)
+        segmentation.finished.connect(self.segmentation_finished)
+        segmentation.start()
 
-        biosensor = []
-        # the indices length may vary later but for now it is 8
-        bio_len = 8
-        for name in WELL_NAMES: # remaining_wells?
-            biosensor.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
-
-        biosensor_tensor = torch.tensor(np.array(biosensor)).float() 
-
-        with torch.no_grad():
-            output = self.model(biosensor_tensor)
-
-        self.image_size = output.shape[2]
-        self.scaling_factor = self.image_size // 80
-
-        output = torch.sigmoid(output).squeeze().detach().numpy()
-        self.bin_output = (output > 0.5).astype(int)
-        if self.showCellCenters.isChecked():
-            self.cell_centers = get_cell_centers(self.bin_output)
-
-        # print(self.scaling_factor, self.image_size)
-
+    def segmentation_finished(self):
         if self.scaling_factor == 1:
-            self.GUI_UNet()
+            GUI_UNet(self)
         else: 
-            self.GUI_SRUNet()
-
-    def GUI_SRUNet(self):
-        clear_layers(self.viewer)
-        for i in range(len(WELL_NAMES)):
-            visible = (i == 0)
-            name = WELL_NAMES[i]            
-            well_tensor = torch.tensor(self.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
-            upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(self.image_size, self.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
-            self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
-            self.viewer.add_labels(self.bin_output[i], name=name + self._segment, visible=visible)
-            if self.showCellCenters.isChecked():
-                self.viewer.add_points(invert_coords(self.cell_centers[i]), name=name + ' cell centers', size=self.scaling_factor/2, face_color='red', visible=visible)
-        self.GUI_plot()
-
-    def GUI_UNet(self):
-        clear_layers(self.viewer)
-        for i in range(len(WELL_NAMES)):
-            visible = (i == 0)
-            name = WELL_NAMES[i]
-            self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-            self.viewer.add_labels(self.bin_output[i], name=name + self._segment, visible=visible)
-            if self.showCellCenters.isChecked():
-                self.viewer.add_points(invert_coords(self.cell_centers[i]), name=name + ' cell centers', size=1, face_color='red', visible=visible)
-        self.GUI_plot()
-
-    def GUI_plot(self):
-        if self.docked_plot is not None:
-            self.viewer.window.remove_dock_widget(widget=self.docked_plot)
-        
-        current_line = get_cell_line_by_coords(self.well_data[WELL_NAMES[0]], 0, 0, self.phases)
-
-        # create mpl figure with subplots
-        mpl_fig = plt.figure()
-        ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
-        (line,) = ax.plot(self.time, current_line)
-        # add the figure to the viewer as a FigureCanvas widget
-        self.docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig), name='Cell signal plot')
-        self.docked_plot.setMinimumSize(200, 300)
-
-        # add a double click callback to all of the layers
-        # the well name in the layer name is important to get the selected layer
-        for layer in self.viewer.layers:
-            @layer.mouse_double_click_callbacks.append
-            def update_plot_on_double_click(layer, event):
-                try:
-                    name = layer.name.split(' ')[0]
-                    ax.clear()
-
-                    if self.scaling_factor == 1:
-                        x = int(event.position[1])
-                        y = int(event.position[2])
-                    else:
-                        x = int(event.position[0]/self.scaling_factor)
-                        y = int(event.position[1]/self.scaling_factor)
-
-                    x = max(0, min(x, 79))
-                    y = max(0, min(y, 79))
-
-                    current_line = get_cell_line_by_coords(self.well_data[name], x, y, self.phases)
-                    (line,) = ax.plot(self.time, current_line)
-                    ax.set_title(f"Well: {name}, Cell: [{x} {y}]")
-                    line.figure.canvas.draw()
-                except IndexError:
-                    pass
-        
-        # Once the peak detection is started new data cant be loaded
-        self.exportButton.setEnabled(True)
-        self.loadButton.setEnabled(False)
-        self.processButton.setEnabled(False)
-        self.segmentationButton.setEnabled(True)
-        self.segmentationButton.setText("Segment")
+            GUI_SRUNet(self)
 
     def export_data(self):
         self.progressBar.setMaximum(0)
@@ -285,14 +197,13 @@ class SegmentationWidget(QWidget):
 
         segments = {}
         for name in self.remaining_wells:
-            if self.showCellCenters.isChecked():
-                segments[name] = (self.viewer.layers[name + self._segment].data, self.viewer.layers[name + ' cell centers'].data)
-            else:
-                segments[name] = self.viewer.layers[name + self._segment].data
+            segments[name] = self.viewer.layers[name + self._segment].data
 
         # segments['size'] = self.image_size # kell? mert shapeből úgy is kiolvasható
 
         np.savez(os.path.join(self.RESULT_PATH, 'well_segments'), **segments)
+
+        # save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
 
         # # Later on, load from disk
         # segments = np.load('well_segments.npz')
@@ -302,18 +213,103 @@ class SegmentationWidget(QWidget):
         
         self.progressBar.setMaximum(1)
 
-    
-
-
-
-def get_cell_centers(output):
-    cell_centers = []
-    for i in range(len(WELL_NAMES)):
-        pred = output[i].squeeze().astype(np.uint8)
-        _, _, _, centers = cv2.connectedComponentsWithStats(pred, connectivity=8)
-        cell_centers.append(centers[1:])
-    return cell_centers
-
 def lin_indices(original_length, subsampled_length):
     indices = np.linspace(0, original_length - 1, subsampled_length + 1, dtype=int)
     return indices[1:]
+
+@thread_worker
+def segmentation_thread(self):
+    self.model = torch.jit.load(self.modelPath.text())
+    biosensor = []
+    # the indices length may vary later but for now it is 8
+    bio_len = 8
+    for name in WELL_NAMES: # remaining_wells?
+        biosensor.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
+
+    biosensor_tensor = torch.tensor(np.array(biosensor)).float() 
+
+    with torch.no_grad():
+        output = self.model(biosensor_tensor)
+
+    self.image_size = output.shape[2]
+    self.scaling_factor = self.image_size // 80
+
+    output = torch.sigmoid(output).squeeze().detach().numpy()
+    self.bin_output = (output > 0.5).astype(int)
+
+    self.cell_centers = []
+    self.labels = []
+    for i in range(len(WELL_NAMES)):
+        pred = self.bin_output[i].squeeze().astype(np.uint8)
+        _, labels, _, centers = cv2.connectedComponentsWithStats(pred, connectivity=8)
+        self.cell_centers.append(centers[1:])
+        self.labels.append(labels)
+
+    # print(self.scaling_factor, self.image_size)
+
+def GUI_SRUNet(self):
+    clear_layers(self.viewer)
+    for i in range(len(WELL_NAMES)):
+        visible = (i == 0)
+        name = WELL_NAMES[i]            
+        well_tensor = torch.tensor(self.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
+        upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(self.image_size, self.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
+        self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
+        self.viewer.add_labels(self.labels[i], name=name + self._segment, visible=visible)
+    GUI_plot(self)
+
+def GUI_UNet(self):
+    clear_layers(self.viewer)
+    for i in range(len(WELL_NAMES)):
+        visible = (i == 0)
+        name = WELL_NAMES[i]
+        self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
+        self.viewer.add_labels(self.labels[i], name=name + self._segment, visible=visible)
+    GUI_plot(self)
+
+def GUI_plot(self):
+    if self.docked_plot is not None:
+        self.viewer.window.remove_dock_widget(widget=self.docked_plot)
+    
+    current_line = get_cell_line_by_coords(self.well_data[WELL_NAMES[0]], 0, 0, self.phases)
+
+    # create mpl figure with subplots
+    mpl_fig = plt.figure()
+    ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
+    (line,) = ax.plot(self.time, current_line)
+    # add the figure to the viewer as a FigureCanvas widget
+    self.docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig), name='Cell signal plot')
+    self.docked_plot.setMinimumSize(200, 300)
+
+    # add a double click callback to all of the layers
+    # the well name in the layer name is important to get the selected layer
+    for layer in self.viewer.layers:
+        @layer.mouse_double_click_callbacks.append
+        def update_plot_on_double_click(layer, event):
+            try:
+                name = layer.name.split(' ')[0]
+                ax.clear()
+
+                if self.scaling_factor == 1:
+                    x = int(event.position[1])
+                    y = int(event.position[2])
+                else:
+                    x = int(event.position[0]/self.scaling_factor)
+                    y = int(event.position[1]/self.scaling_factor)
+
+                x = max(0, min(x, 79))
+                y = max(0, min(y, 79))
+
+                current_line = get_cell_line_by_coords(self.well_data[name], x, y, self.phases)
+                (line,) = ax.plot(self.time, current_line)
+                ax.set_title(f"Well: {name}, Cell: [{x} {y}]")
+                line.figure.canvas.draw()
+            except IndexError:
+                pass
+    
+    # Once the peak detection is started new data cant be loaded
+    self.exportButton.setEnabled(True)
+    self.loadButton.setEnabled(False)
+    self.processButton.setEnabled(False)
+    self.segmentationButton.setEnabled(True)
+    self.segmentationButton.setText("Segment")
