@@ -19,6 +19,7 @@ class PeakDetectionWidget(QWidget):
         self.background_selector = False
         self.cell_selector = False
         self.full_phases = []
+        self.scaling_factor = 1
         self.initUI()
 
     def initUI(self):

@@ -1,9 +1,6 @@
 import os
 import napari
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
-import cv2
 
 from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout, 
                             QPushButton, QLineEdit, QFileDialog, 
@@ -187,9 +184,9 @@ class SegmentationWidget(QWidget):
 
     def segmentation_finished(self):
         if self.scaling_factor == 1:
-            GUI_UNet(self)
+            UNet_segmentation_GUI(self)
         else: 
-            GUI_SRUNet(self)
+            SRUNet_segmentation_GUI(self)
 
     def export_data(self):
         self.progressBar.setMaximum(0)
@@ -203,8 +200,6 @@ class SegmentationWidget(QWidget):
 
         np.savez(os.path.join(self.RESULT_PATH, 'well_segments'), **segments)
 
-        # save_params(self.RESULT_PATH, self.well_data, self.preprocessing_params, self.localization_params)
-
         # # Later on, load from disk
         # segments = np.load('well_segments.npz')
         # well_segments = {key: segments[key] for key in segments.files}
@@ -212,104 +207,4 @@ class SegmentationWidget(QWidget):
         #     print(key, segments[key].shape)
         
         self.progressBar.setMaximum(1)
-
-def lin_indices(original_length, subsampled_length):
-    indices = np.linspace(0, original_length - 1, subsampled_length + 1, dtype=int)
-    return indices[1:]
-
-@thread_worker
-def segmentation_thread(self):
-    self.model = torch.jit.load(self.modelPath.text())
-    biosensor = []
-    # the indices length may vary later but for now it is 8
-    bio_len = 8
-    for name in WELL_NAMES: # remaining_wells?
-        biosensor.append(self.well_data[name][lin_indices(self.well_data[name].shape[0], bio_len)])
-
-    biosensor_tensor = torch.tensor(np.array(biosensor)).float() 
-
-    with torch.no_grad():
-        output = self.model(biosensor_tensor)
-
-    self.image_size = output.shape[2]
-    self.scaling_factor = self.image_size // 80
-
-    output = torch.sigmoid(output).squeeze().detach().numpy()
-    self.bin_output = (output > 0.5).astype(int)
-
-    self.cell_centers = []
-    self.labels = []
-    for i in range(len(WELL_NAMES)):
-        pred = self.bin_output[i].squeeze().astype(np.uint8)
-        _, labels, _, centers = cv2.connectedComponentsWithStats(pred, connectivity=8)
-        self.cell_centers.append(centers[1:])
-        self.labels.append(labels)
-
-    # print(self.scaling_factor, self.image_size)
-
-def GUI_SRUNet(self):
-    clear_layers(self.viewer)
-    for i in range(len(WELL_NAMES)):
-        visible = (i == 0)
-        name = WELL_NAMES[i]            
-        well_tensor = torch.tensor(self.well_data[name][-1]).unsqueeze(0).unsqueeze(0)
-        upscaled_well = torch.nn.functional.interpolate(well_tensor, size=(self.image_size, self.image_size), mode='nearest').squeeze(0).squeeze(0).numpy()
-        self.viewer.add_image(upscaled_well, name=name, colormap='viridis', visible=visible)
-        self.viewer.add_labels(self.labels[i], name=name + self._segment, visible=visible)
-    GUI_plot(self)
-
-def GUI_UNet(self):
-    clear_layers(self.viewer)
-    for i in range(len(WELL_NAMES)):
-        visible = (i == 0)
-        name = WELL_NAMES[i]
-        self.viewer.add_image(self.well_data[name], name=name, colormap='viridis', visible=visible)
-        self.viewer.add_labels(self.labels[i], name=name + self._segment, visible=visible)
-    GUI_plot(self)
-
-def GUI_plot(self):
-    if self.docked_plot is not None:
-        self.viewer.window.remove_dock_widget(widget=self.docked_plot)
-    
-    current_line = get_cell_line_by_coords(self.well_data[WELL_NAMES[0]], 0, 0, self.phases)
-
-    # create mpl figure with subplots
-    mpl_fig = plt.figure()
-    ax = mpl_fig.add_subplot(111)   # 1 row, 1 column, 1st plot
-    (line,) = ax.plot(self.time, current_line)
-    # add the figure to the viewer as a FigureCanvas widget
-    self.docked_plot = self.viewer.window.add_dock_widget(FigureCanvas(mpl_fig), name='Cell signal plot')
-    self.docked_plot.setMinimumSize(200, 300)
-
-    # add a double click callback to all of the layers
-    # the well name in the layer name is important to get the selected layer
-    for layer in self.viewer.layers:
-        @layer.mouse_double_click_callbacks.append
-        def update_plot_on_double_click(layer, event):
-            try:
-                name = layer.name.split(' ')[0]
-                ax.clear()
-
-                if self.scaling_factor == 1:
-                    x = int(event.position[1])
-                    y = int(event.position[2])
-                else:
-                    x = int(event.position[0]/self.scaling_factor)
-                    y = int(event.position[1]/self.scaling_factor)
-
-                x = max(0, min(x, 79))
-                y = max(0, min(y, 79))
-
-                current_line = get_cell_line_by_coords(self.well_data[name], x, y, self.phases)
-                (line,) = ax.plot(self.time, current_line)
-                ax.set_title(f"Well: {name}, Cell: [{x} {y}]")
-                line.figure.canvas.draw()
-            except IndexError:
-                pass
-    
-    # Once the peak detection is started new data cant be loaded
-    self.exportButton.setEnabled(True)
-    self.loadButton.setEnabled(False)
-    self.processButton.setEnabled(False)
-    self.segmentationButton.setEnabled(True)
-    self.segmentationButton.setText("Segment")
+        print("Export finished")
