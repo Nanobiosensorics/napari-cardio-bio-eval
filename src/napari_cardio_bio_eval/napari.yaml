@@ -6,10 +6,15 @@ visibility: hidden
 categories: ["Annotation", "Segmentation"]
 contributions:
   commands:
-    - id: napari-cardio-bio-eval.cardio_bio_eval_widget
-      python_name: napari_cardio_bio_eval:CardioBioEvalWidget
-      title: Data load nad processing widget
+    - id: napari-cardio-bio-eval.cardio_bio_peak_detection_widget
+      python_name: napari_cardio_bio_eval:PeakDetectionWidget
+      title: Biosensor peak detection widget
+    - id: napari-cardio-bio-eval.cardio_bio_segmentation_widget
+      python_name: napari_cardio_bio_eval:SegmentationWidget
+      title: Biosensor segmentation widget
 
   widgets:
-    - command: napari-cardio-bio-eval.cardio_bio_eval_widget
-      display_name: Cardio Bio Eval Widget
+    - command: napari-cardio-bio-eval.cardio_bio_peak_detection_widget
+      display_name: Cardio Bio Peak Detection Widget
+    - command: napari-cardio-bio-eval.cardio_bio_segmentation_widget
+      display_name: Cardio Bio Segmentation Widget

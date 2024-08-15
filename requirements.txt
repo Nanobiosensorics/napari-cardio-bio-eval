@@ -1,7 +1,8 @@
 qtpy
 matplotlib
-opencv-python
+opencv-python-headless
 openpyxl
+numpy==1.26
 
 tox
 pytest

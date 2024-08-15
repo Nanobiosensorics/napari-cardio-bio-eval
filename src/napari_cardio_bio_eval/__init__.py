@@ -1,8 +1,18 @@
 __version__ = "0.0.1"
 
-
-from ._widget import CardioBioEvalWidget
+import napari
+from napari_cardio_bio_eval.peak_detection_widget import PeakDetectionWidget
+from napari_cardio_bio_eval.segmentation_widget import SegmentationWidget
 
 __all__ = (
-    "CardioBioEvalWidget",
+    "PeakDetectionWidget",
+    "SegmentationWidget",
 )
+
+viewer = napari.Viewer()
+widget = PeakDetectionWidget(viewer)
+# widget = SegmentationWidget(viewer)
+viewer.window.add_dock_widget(widget, area="right")
+widget.dirLineEdit.setText("C:/Users/wittd/Desktop/epic_data")
+
+napari.run()
