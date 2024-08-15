@@ -1,5 +1,5 @@
 # Cardio biosensor evaluaton in Napari
-<!--
+
 [![License BSD-3](https://img.shields.io/pypi/l/napari-cardio-bio-eval.svg?color=green)](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/napari-cardio-bio-eval.svg?color=green)](https://pypi.org/project/napari-cardio-bio-eval)
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-cardio-bio-eval.svg?color=green)](https://python.org)
@@ -9,7 +9,7 @@
 
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
 
------------------------------------->
+----------------------------------
 
 The plugin provides a widget which can load, preprocess, annotate and export cardio biosensor data.  
 
@@ -22,14 +22,14 @@ https://napari.org/stable/plugins/index.html
 -->
 
 ## Installation
-<!--
+
 You can install `napari-cardio-bio-eval` via [pip]:
 
     pip install napari-cardio-bio-eval
 
 Or use the Napari plugin manager and search for `napari-cardio-bio-eval`.
--->
 
+<!--
 First install a fresh conda enviroment (or other python enviroment) and activate it:
 
     conda create -y -n napari-env -c conda-forge python=3.10
@@ -42,10 +42,10 @@ Then you can pip install the plugin from the github repository and it will also 
 Then you can start napari with a simple command:
 
     napari
-
+-->
 # Usage
 
-You can open the plugin's widget from the **Plugins** menu after the installation of the plugin.
+You can open the plugin's widgets from the **Plugins** menu after the installation of the plugin.
 
 ![image](https://github.com/Nanobiosensorics/napari-cardio-bio-eval/assets/78443646/5d209fb5-c921-45d6-bb63-c5e3ff1fb1f8)
 
@@ -116,6 +116,10 @@ You can select what kind of data do you want to export and click the ***Export D
 - Plot cells individually: 
 - Signal parts by phases: 
 - Max centered signals: 
+
+## Segmentation widget
+
+The data loading and preprocessing is the same but it uses a deep learning model to segment the cells.
 
 ## License
 
