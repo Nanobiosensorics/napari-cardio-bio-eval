@@ -77,6 +77,8 @@ jobs:
     if: contains(github.ref, 'tags')
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
