@@ -10,7 +10,6 @@ from qtpy.QtWidgets import (QWidget, QHBoxLayout, QFormLayout,
 from napari_cardio_bio_eval.widget_utils import *
 from nanobio_core.epic_cardio.processing import RangeType, load_data, load_params, preprocessing, localization, save_params
 from nanobio_core.epic_cardio.defs import WELL_NAMES
-from nanobio_core.epic_cardio.data_correction import correct_well
 from export_and_plot.export import export_results
 
 from napari.qt.threading import thread_worker
@@ -179,21 +178,6 @@ class SegmentationWidget(QWidget):
     def segmentation(self):
         self.segmentationButton.setEnabled(False)
         self.segmentationButton.setText("Segmenting...")
-
-        if self.background_selector:
-            self.filter_ptss = get_filter_points(self.viewer)
-            self.background_selector = False
-
-            slicer = slice(self.selected_range[0], self.selected_range[1])
-            for name in WELL_NAMES:
-                well_tmp = self.raw_wells[name]
-                well_tmp = well_tmp[slicer]
-                well_corr, _, _ = correct_well(well_tmp, 
-                                                    coords= self.filter_ptss[name],
-                                                    threshold=self.preprocessing_params['drift_correction']['threshold'],
-                                                    mode=self.preprocessing_params['drift_correction']['filter_method'])
-                
-                self.well_data[name] = well_corr
 
         segmentation = segmentation_thread(self)
         segmentation.finished.connect(self.segmentation_finished)

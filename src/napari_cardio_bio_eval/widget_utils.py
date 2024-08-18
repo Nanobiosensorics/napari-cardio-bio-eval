@@ -8,6 +8,7 @@ import torch
 from nanobio_core.epic_cardio.processing import load_data, load_params, preprocessing, localization
 from nanobio_core.epic_cardio.defs import WELL_NAMES
 from export_and_plot.export import export_results
+from nanobio_core.epic_cardio.data_correction import correct_well
 
 from napari.qt.threading import thread_worker
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -89,6 +90,22 @@ def segmentation_thread(widget):
     The model is loaded from the path given in the GUI and the well data is processed with the model.
     @param widget: Needs the widget to access the GUI elements and save the data to the widget.
     """
+
+    if widget.background_selector:
+        widget.filter_ptss = get_filter_points(widget.viewer)
+        widget.background_selector = False
+
+        slicer = slice(widget.selected_range[0], widget.selected_range[1])
+        for name in WELL_NAMES:
+            well_tmp = widget.raw_wells[name]
+            well_tmp = well_tmp[slicer]
+            well_corr, _, _ = correct_well(well_tmp, 
+                                                coords= widget.filter_ptss[name],
+                                                threshold=widget.preprocessing_params['drift_correction']['threshold'],
+                                                mode=widget.preprocessing_params['drift_correction']['filter_method'])
+            
+            widget.well_data[name] = well_corr
+
     # loadin the script torch model
     widget.model = torch.jit.load(widget.modelPath.text())
     biosensor = []
@@ -146,7 +163,7 @@ def manual_background_selection(widget):
         except Exception as e:
             pass
     # Remove the previous layers from the viewer
-    clear_layers(widget.viewer)
+    widget.viewer.layers.clear()
     # Add the wells and the filter points to the viewer, in napari we can add, remove and move the points
     for name in WELL_NAMES:
         visible = (name == WELL_NAMES[0])
@@ -168,7 +185,7 @@ def load_and_preprocess_data_GUI(widget):
     The next step is the preprocessing so the process button is enabled.
     @param widget: Needs the widget to access the GUI elements and save the data to the widget.
     """
-    clear_layers(widget.viewer)
+    widget.viewer.layers.clear()
     for name in WELL_NAMES:
         visible = (name == WELL_NAMES[0])
         widget.viewer.add_image(widget.well_data[name], name=name, colormap='viridis', visible=visible)
@@ -181,7 +198,7 @@ def peak_detection_GUI(widget):
     Also add the cell signals plot to the viewer.
     @param widget: Needs the widget to access the GUI elements and save the data to the widget.
     """
-    clear_layers(widget.viewer)
+    widget.viewer.layers.clear()
     for name in widget.remaining_wells:
         visible = (name == widget.remaining_wells[0])
         widget.viewer.add_image(widget.well_data[name][0], name=name, colormap='viridis', visible=visible)
@@ -210,7 +227,7 @@ def SRUNet_segmentation_GUI(widget):
     Also add the cell signals plot to the viewer.
     @param widget: Needs the widget to access the GUI elements and save the data to the widget.
     """
-    clear_layers(widget.viewer)
+    widget.viewer.layers.clear()
     for i in range(len(WELL_NAMES)):
         visible = (i == 0)
         name = WELL_NAMES[i]            
@@ -235,7 +252,7 @@ def UNet_segmentation_GUI(widget):
     Also add the cell signals plot to the viewer.
     @param widget: Needs the widget to access the GUI elements and save the data to the widget.
     """
-    clear_layers(widget.viewer)
+    widget.viewer.layers.clear()
     for i in range(len(WELL_NAMES)):
         visible = (i == 0)
         name = WELL_NAMES[i]
@@ -323,11 +340,6 @@ def lin_indices(original_length, subsampled_length):
     """
     indices = np.linspace(0, original_length - 1, subsampled_length + 1, dtype=int)
     return indices[1:]
-
-def clear_layers(viewer):
-    # Remove all layers from the viewer (is there a better way to do this?)
-    viewer.layers.select_all()
-    viewer.layers.remove_selected()
 
 def loaded_params_to_GUI(widget):
     """
