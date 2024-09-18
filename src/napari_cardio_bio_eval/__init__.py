@@ -1,4 +1,4 @@
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 import napari
 from napari_cardio_bio_eval.peak_detection_widget import PeakDetectionWidget
