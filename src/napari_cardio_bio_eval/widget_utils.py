@@ -176,8 +176,8 @@ def manual_background_selection(widget):
         widget.viewer.add_points(invert_coords(widget.filter_ptss[name]), name=name + widget._bg_points, size=1, face_color='orange', visible=visible)
 
     # Once the background selection is started new data can't be loaded for now because of a napari draw bug
-    widget.loadButton.setEnabled(False)
-    widget.processButton.setEnabled(False)
+    # widget.loadButton.setEnabled(False)
+    # widget.processButton.setEnabled(False)
 
 def load_and_preprocess_data_GUI(widget):
     """
@@ -191,6 +191,7 @@ def load_and_preprocess_data_GUI(widget):
         widget.viewer.add_image(widget.well_data[name], name=name, colormap='viridis', visible=visible)
 
     widget.backgroundSelectorButton.setEnabled(True)
+    widget.viewer.layers.selection.events.active.connect(lambda event: selected_layer_visible(event, widget.viewer))
 
 def peak_detection_GUI(widget):
     """
@@ -239,8 +240,8 @@ def SRUNet_segmentation_GUI(widget):
     current_line = get_cell_line_by_coords(widget.well_data[WELL_NAMES[0]], 0, 0, widget.phases)
     plot_GUI(widget, widget.well_data, current_line)
 
-    widget.loadButton.setEnabled(False)
-    widget.processButton.setEnabled(False)   
+    # widget.loadButton.setEnabled(False)
+    # widget.processButton.setEnabled(False)   
     widget.exportButton.setEnabled(True)
     widget.segmentationButton.setEnabled(True)
     widget.segmentationButton.setText("Segment")
@@ -262,8 +263,8 @@ def UNet_segmentation_GUI(widget):
     current_line = get_cell_line_by_coords(widget.well_data[WELL_NAMES[0]], 0, 0, widget.phases)
     plot_GUI(widget, widget.well_data, current_line)
     
-    widget.loadButton.setEnabled(False)
-    widget.processButton.setEnabled(False)   
+    # widget.loadButton.setEnabled(False)
+    # widget.processButton.setEnabled(False)   
     widget.exportButton.setEnabled(True)
     widget.segmentationButton.setEnabled(True)
     widget.segmentationButton.setText("Segment")
@@ -325,6 +326,24 @@ def add_double_click_callbacks_to_layers(widget, well_data, ax):
                 line.figure.canvas.draw()
             except IndexError:
                 pass
+
+def selected_layer_visible(event, viewer):
+    """
+    Called when the user selects a layer in the viewer and gets the well name from the layer.
+    Then it sets the layes with the same well name to visible and the others to invisible.
+    @param viewer: The napari viewer.
+    """
+    selected_layer = event.source.active
+
+    if selected_layer is not None:
+        # well_name = selected_layer.name.split(' ')[0] # the first word in the layer name should be the well name
+        well_name = selected_layer.name[0:2] # the first two characters in the layer name should be the well name
+        for layer in viewer.layers:
+            if well_name in layer.name:
+                layer.visible = True
+            else:
+                layer.visible = False
+
 
 # GUI helper functions
 def invert_coords(coords):
