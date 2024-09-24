@@ -367,8 +367,8 @@ def loaded_params_to_GUI(widget):
     """
     if widget.preprocessing_params_loaded:
         widget.preprocessing_params = widget.preprocessing_params_loaded
-        widget.horizontalFlip.setChecked(widget.preprocessing_params['flip'][0])
-        widget.verticalFlip.setChecked(widget.preprocessing_params['flip'][1])
+        # widget.horizontalFlip.setChecked(widget.preprocessing_params['flip'][0])
+        # widget.verticalFlip.setChecked(widget.preprocessing_params['flip'][1])
         widget.rangeTypeSelect.setCurrentIndex(widget.preprocessing_params['signal_range']['range_type'])
         widget.rangeMin.setValue(widget.preprocessing_params['signal_range']['ranges'][0])
         if widget.preprocessing_params['signal_range']['ranges'][1] is None:
